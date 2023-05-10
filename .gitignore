@@ -1,0 +1,9 @@
+
+aerial/
+data/
+data_real/
+data_super_real/
+mask/
+shifted_aerial_points/
+base_files/
+*.pyc
