@@ -32,9 +32,11 @@ Create an object using a pre-saved data file (there are several available in thi
     rcs = I24_RCS(<path to homography cpkl file>)
     
     
-Create some object bounding boxes on the roadway:
+Create some object bounding boxes on the roadway: 
     
-    # x_position, y_position, length, width, height, direction
+    # Expected form is a tensor of size [n_objects,6] 
+    # x_position (feet), y_position, length, width, height, direction (1 for EB or -1 for WB)
+    
     road_boxes = torch.rand(10,6)
     road_boxes[:,0] *= 10000
     road_boxes[:,1] = (road_boxes[:,1] - 0.5)*48
@@ -44,7 +46,11 @@ Create some object bounding boxes on the roadway:
     road_boxes[:,5] = torch.sign(road_boxes[:,1])
    
 Convert from roadway coordinates (state, per internal convention) to state plane coordinates (space, per internal convention):
-   
+    
+    # objects in space (state plane) are represented as tensors of shape [n_objects,n_points,3]
+    # where n_points is generally either 1 for a single point or 8 for a bounding box, 
+    # and the 3 values on the last dimension correspond to state plane x,y and height off roadway
+    
     state_plane_boxes = rcs.state_to_space(road_boxes)
     
     
