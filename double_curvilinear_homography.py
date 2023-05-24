@@ -2827,7 +2827,7 @@ class Curvilinear_Homography():
         if self.yellow_offsets is not None:
             # shift so that yellow lines have constant y-position
             bins = (new_pts[:,0] / 10).int()
-            bins = torch.clamp(bins,min = 0, max = len(self.yellow_offsets["WB"]))
+            bins = torch.clamp(bins,min = 0, max = len(self.yellow_offsets["WB"])-1)
 
             bins = bins.data.cpu().numpy()
             
@@ -2863,7 +2863,7 @@ class Curvilinear_Homography():
         if self.yellow_offsets is not None:
             # shift so that yellow lines have constant y-position
             bins = (points[:,0] / 10).int()
-            bins = torch.clamp(bins,min = 0, max = len(self.yellow_offsets["WB"]))
+            bins = torch.clamp(bins,min = 0, max = len(self.yellow_offsets["WB"])-1)
 
             bins = bins.data.cpu().numpy()
 
