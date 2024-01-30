@@ -609,7 +609,7 @@ class CameraAnnotator:
                 self.cur_image = cv2.putText(
                     self.cur_image, " " + point[2], pt, font, self.SHOW_LABELS, self.text_color, 1)
             self.cur_image = cv2.circle(self.cur_image, pt, 1, (255, 0, 0), -1)
-            self.cur_image = cv2.circle(self.cur_image, pt, 4, (255, 0, 0), 1)
+            self.cur_image = cv2.circle(self.cur_image, pt, 4, (255, 0, 0), -1)
             
         
             
@@ -1175,12 +1175,12 @@ class CameraAnnotator:
 if __name__ == "__main__":
     for p in range(27,41):
      for c in ["01","02","03","04","05","06"]:
-        base_dir = "/home/derek/Data/dataset_beta/sequence_1"
-        base_dir = "/home/derek/Data/MOTION_homography_10_2022"
-        base_dir = "/home/derek/Data/homo/reference/4k"
+        base_dir = "/home/worklab/Data/dataset_beta/sequence_1"
+        base_dir = "/home/worklab/Data/MOTION_homography_10_2022"
+        base_dir = "/home/worklab/Data/homo/reference/4k"
         #save_dir = "/home/derek/Documents/i24/i24_homography/data_real"
         #save_dir = "/home/derek/Documents/i24/i24_homography/data"
-        save_dir = "/home/derek/Data/homo/working"
+        save_dir = "/home/worklab/Data/homo/working"
         try:
             camera_name = sys.argv[1]
             #print(camera_name)

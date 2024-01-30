@@ -811,7 +811,7 @@ class Curvilinear_Homography():
     
     def _fit_z_vp(self,cor,im_data,direction):
         
-        print("fitting Z coordinate scale")
+        #print("fitting Z coordinate scale")
         
         P_orig = cor["P"].copy()
         
@@ -922,7 +922,7 @@ class Curvilinear_Homography():
         
         #print("Best Error: {}".format(best_error))
         
-    def _fit_spline(self,space_dir,use_MM_offset = False):
+    def _fit_spline(self,space_dir,use_MM_offset = True):
         """
         Spline fitting is done by:
             1. Assemble all points labeled along a yellow line in either direction
@@ -997,7 +997,7 @@ class Curvilinear_Homography():
                 
                 
                 for line in ["yel{}".format(line_side), "d1{}".format(line_side),"d2{}".format(line_side),"d3{}".format(line_side)]:
-                    print("On line {} {}".format(line,direction))
+                    #print("On line {} {}".format(line,direction))
                     ae_spl_x = []
                     ae_spl_y = []
                     ae_spl_u = []  # u parameterizes distance along spline 
@@ -1096,7 +1096,7 @@ class Curvilinear_Homography():
                         tck, u = interpolate.splprep(ae_data.astype(float), s=s0, w = w, u = ae_spl_u)
                         knots = tck[0]
                         knot_spacing = np.min(np.abs(knots[5:-4] - knots[4:-5]))
-                        print(knot_spacing,s0)
+                        #print(knot_spacing,s0)
                     tck, u = interpolate.splprep(ae_data.astype(float), s=s0, w = w, u = ae_spl_u)
                     splines["{}_{}_{}".format(line,direction,line_side)] = [tck,u]
                 
@@ -1155,7 +1155,7 @@ class Curvilinear_Homography():
                     mid_line_tck,mid_line_u = interpolate.splprep(data, s=s0, u = u_range)
                     knots = mid_line_tck[0]
                     knot_spacing = np.min(np.abs(knots[5:-4] - knots[4:-5]))
-                    print(knot_spacing,s0)
+                    #print(knot_spacing,s0)
                 # store
             
                 splines[new_key] = [mid_line_tck,mid_line_u]
@@ -2293,15 +2293,20 @@ class Curvilinear_Homography():
         
         
         import matplotlib.pyplot as plt
-        plt.figure()
+        plt.figure(figsize = (4,4))
         leg= []
+        leg2 = []
         # 5. Plot
         
         for key in roadway_data.keys():
-            plt.plot(roadway_data[key][:,0],roadway_data[key][:,1])
+            if "yel" in key:
+                color = (1,1,0)
+            else:
+                color = (0,0,0)
+            legentry1 = plt.plot(roadway_data[key][:,0],roadway_data[key][:,1],color = color)
             leg.append(key)
         
-        if self.all_splines:
+        if False and self.all_splines:
             for key in self.all_splines.keys():
                 if True and "center" not in key:
                     
@@ -2368,8 +2373,13 @@ class Curvilinear_Homography():
                     offsets = yellow_offsets[direction][road_data_offset_bins]
                     rcs_pts[:,1] = rcs_pts[:,1] - offsets + ymean
                     
-                plt.scatter(rcs_pts[:,0],rcs_pts[:,1])
+                legentry2 = plt.scatter(rcs_pts[:,0],rcs_pts[:,1], color = (0,0,1), marker = ".")
+        
+        plt.xlabel("Roadway X (ft)")
+        plt.ylabel("Roadway Y (ft)")
+        plt.legend([legentry2],["Image Correspondence Points, Transformed"])
 
+        
         
     def _generate_lane_offset_old(self,space_dir):
         """
@@ -3304,7 +3314,6 @@ class Curvilinear_Homography():
             boxes[:,4] *= 10
             boxes[:,5] = self.polarity * torch.sign(boxes[:,1])
 
-            
             space_boxes = self.state_to_space(boxes)
             repro_state_boxes = self.space_to_state(space_boxes)
             
@@ -3327,7 +3336,7 @@ class Curvilinear_Homography():
             boxes[:,2] *= 30
             boxes[:,3] *= 10
             boxes[:,4] *= 10
-            boxes[:,5] = self. polarity * torch.sign(boxes[:,1])
+            boxes[:,5] = self.polarity * torch.sign(boxes[:,1])
             
             #boxes[:,1] = 0.01
             # boxes[:,2] = 30
@@ -3393,32 +3402,67 @@ class Curvilinear_Homography():
                     except:
                         pass
                
-            
+                
+    def compute_ppf(self):
+        """ computes the number of pixels corresponding to a single foot in the lateral direction 
+        (i.e. roughly the number of pixels wide that a license plate is"""
+        max_ppf = {}
         
+        for corr in self.correspondence:
+            if "P02C06"  in corr or "P01C02" in corr or "P01C04" in corr: continue 
+    
+            # stack all lane marker points into a big ol juicy point sandwich (tensor)
+            space_pts = torch.tensor(self.correspondence[corr]["space_pts"])
+            space_pts = torch.cat((space_pts,torch.zeros(space_pts.shape[0],1)),dim = 1)
+            road_pts = self.space_to_state(space_pts.unsqueeze(1))
+            
+            # copy and shift laterally into a transposed point sandwich
+            road_pts_shifted = road_pts.clone()
+            road_pts_shifted[:,1] += 1
+            
+            # convert to image space and compare
+            im_pts = self.state_to_im(road_pts,name = corr)[:,0,:]
+            im_pts_shifted = self.state_to_im(road_pts_shifted,name = corr)[:,0,:]
+            dist = ((im_pts_shifted - im_pts)**2).sum(dim = 1).sqrt()
+        
+            # store maximum ppf
+            max_ppf[corr] = dist.max()
+            
+        total_max = 0
+        for corr in max_ppf:
+            print("Maximum pixels per lateral foot for {}: {:.1f}pixels".format(corr,max_ppf[corr]))
+            if max_ppf[corr] > total_max:
+                total_max = max_ppf[corr]
+        print("\n Overall maximum: {:.1f}".format(total_max))
 #%% MAIN        
     
 if __name__ == "__main__":
-    #im_dir = "/home/derek/Documents/i24/i24_homography/data_real"
-    #space_dir = "/home/derek/Documents/i24/i24_homography/aerial/to_P24"
-    #save_file =  "P01_P40b.cpkl"
-
-    #im_dir = "/home/derek/Data/MOTION_HOMOGRAPHY_FINAL"
-    space_dir = "/home/derek/Documents/i24/i24_homography/aerial/all_poles_aerial_labels"
-    #space_dir = "/home/derek/Documents/i24/i24_homography/shifted_aerial_points"
-
     
-    save_file = "CIRCLES_20_Wednesday_20230503.cpkl"
-    #im_dir = "/home/derek/Data/homo/working"
-    im_dir = "/home/derek/Data/homo/CIRCLES_20_Wednesday_20230503"
-
-    hg = Curvilinear_Homography(save_file = save_file,space_dir = space_dir, im_dir = im_dir,downsample = 1)
-
-    hg._generate_lane_offset(space_dir,SHIFT = False,SPLINE_OFFSET = False)
-    hg._convert_landmarks(space_dir)
-    hg.test_transformation(im_dir+"/4K")
-
-    #hg._generate_extents_file(im_dir)
-    #hg._generate_mask_images(im_dir,mask_save_dir = "/home/derek/Data/ICCV_2023/masks/scene3")
-    #hg._generate_extents_file(im_dir,mode = "", output_path = "cam_extents_polygon.json")
-    hg._fit_MM_offset(space_dir)
-    hg.save(save_file)
+    for day in ["Wednesday"]:#,"Tuesday","Thursday","Friday"]:
+        print("Generating Homography for {}".format(day))
+        #im_dir = "/home/derek/Documents/i24/i24_homography/data_real"
+        #space_dir = "/home/derek/Documents/i24/i24_homography/aerial/to_P24"
+        #save_file =  "P01_P40b.cpkl"
+    
+        #im_dir = "/home/derek/Data/MOTION_HOMOGRAPHY_FINAL"
+        space_dir = "/home/worklab/Documents/i24/i24_rcs/aerial/all_poles_aerial_labels"
+        #space_dir = "/home/derek/Documents/i24/i24_homography/shifted_aerial_points"
+    
+        
+        save_file = "CIRCLES_20_{}_1hour.cpkl".format(day)
+        #im_dir = "/home/derek/Data/homo/working"
+        im_dir = "/home/worklab/Data/homo/CIRCLES_20pre_{}_1hour".format(day)
+    
+        hg = Curvilinear_Homography(save_file = save_file,space_dir = space_dir, im_dir = im_dir,downsample = 1)
+        hg.yellow_offsets = None
+        #hg._generate_lane_offset(space_dir,SHIFT = False,SPLINE_OFFSET = False)
+        # hg._convert_landmarks(space_dir)
+        hg.test_transformation(im_dir+"/4K")
+    
+        # #hg._generate_extents_file(im_dir)
+        # #hg._generate_mask_images(im_dir,mask_save_dir = "/home/derek/Data/ICCV_2023/masks/scene3")
+        # #hg._generate_extents_file(im_dir,mode = "", output_path = "cam_extents_polygon.json")
+        # hg._fit_MM_offset(space_dir)
+        # print("MM offset: {}".format(hg.MM_offset))
+        # hg.save(save_file)
+        hg.compute_ppf()

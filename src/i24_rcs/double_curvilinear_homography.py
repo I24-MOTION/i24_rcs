@@ -3407,14 +3407,16 @@ if __name__ == "__main__":
     #space_dir = "/home/derek/Documents/i24/i24_homography/shifted_aerial_points"
 
     
-    save_file = "CIRCLES_20_Wednesday_20230503.cpkl"
+    #save_file = "CIRCLES_20_Wednesday_20230503.cpkl"
+    save_file = "/home/derek/Documents/i24/i24_track/data/homography/CIRCLES_20_Wednesday.cpkl"
+
     #im_dir = "/home/derek/Data/homo/working"
     im_dir = "/home/derek/Data/homo/CIRCLES_20_Wednesday_20230503"
 
     hg = Curvilinear_Homography(save_file = save_file,space_dir = space_dir, im_dir = im_dir,downsample = 1)
 
     hg._generate_lane_offset(space_dir,SHIFT = False,SPLINE_OFFSET = False)
-    hg._convert_landmarks(space_dir)
+    #hg._convert_landmarks(space_dir)
     hg.test_transformation(im_dir+"/4K")
 
     #hg._generate_extents_file(im_dir)
