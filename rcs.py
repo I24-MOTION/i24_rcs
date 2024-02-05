@@ -24,9 +24,13 @@ import matplotlib.pyplot as plt
 
 from scipy import interpolate
 
-
-
-
+try:
+    
+    import pyproj
+    from pyproj import Proj, transform
+except ModuleNotFoundError:
+    print("Warning: no pyproj package detected, GPS conversion not enabled")
+    
 class I24_RCS:
     
 
@@ -1750,7 +1754,51 @@ class I24_RCS:
         return height
 
     
-         
+    def space_to_gps(self,points):
+        """
+        Converts GPS coordiantes (WGS64 reference) to tennessee state plane coordinates (EPSG 2274).
+        Transform is expected to be accurate within ~2 feet
+        
+        points array or tensor of size [n_pts,1,3] (X,Y,Z in state plane feet)
+        returns out - array or tensor of size [n_pts,2] (Lat Long)
+        """
+        try:
+            points = torch.clone(points[:,0,0:2])
+            
+            #wgs84=pyproj.CRS("EPSG:4326")
+            #tnstate=pyproj.CRS("epsg:2274")
+            transformer = pyproj.Transformer.from_crs("epsg:2274","EPSG:4326")
+            out = transformer.transform(points[:,0].data.numpy(),points[:,1].data.numpy())
+            out = np.array(out).transpose(1,0)
+            out = torch.from_numpy(out)
+            return out
+        
+        except NameError:
+            print("Error: pyproj not imported or installed, returning None")
+            return None
+    
+    def gps_to_space(self,points):
+        """
+        Converts GPS coordiantes (WGS64 reference) to tennessee state plane coordinates (EPSG 2274).
+        Transform is expected to be accurate within ~2 feet
+        
+        points array or tensor of size [n_pts,2]
+        returns out - array or tensor of size [n_pts,1,3]
+        """
+        try:
+            transformer = pyproj.Transformer.from_crs("EPSG:4326","epsg:2274")
+            out = transformer.transform(points[:,0].data.numpy(),points[:,1].data.numpy())
+            out = np.array(out).transpose(1,0)
+            
+            out = torch.from_numpy(out)
+            out = torch.cat((out,torch.zeros(out.shape[0],1)),dim = 1)
+            out = out.unsqueeze(1)
+                
+            return out
+        
+        except NameError:
+            print("Error: pyproj not imported or installed, returning None")
+            return None
     
     #%% Plotting Functions
     

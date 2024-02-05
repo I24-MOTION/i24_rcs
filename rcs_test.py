@@ -148,6 +148,11 @@ def test_transformation(hg,im_dir):
 
          
          space_boxes = hg.state_to_space(boxes)
+         
+         #gps test
+         gps = hg.space_to_gps(space_boxes)
+         space_back = hg.gps_to_space(gps)
+         
          repro_state_boxes = hg.space_to_state(space_boxes)
          
          error = torch.abs(repro_state_boxes - boxes)
