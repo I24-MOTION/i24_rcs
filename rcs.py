@@ -202,12 +202,12 @@ class I24_RCS:
             # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
             self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets = pickle.load(f)
         
-        
+        removals = []
         # get all files in 
         for corr in self.correspondence:
-            print(corr)
+            
             if "old" in corr:
-                #self.correspondence.pop(corr,None)
+                removals.append(corr)
                 continue
             # remove old data
             self.correspondence[corr].pop("P",None)
@@ -224,6 +224,9 @@ class I24_RCS:
             self.correspondence[corr]["P_static"] = P
             self.correspondence[corr]["H_static"] = H
             
+            if torch.isnan(P.sum() + H.sum()):
+                print("No static hg for {}".format(corr))
+            
             # load reference P and H
             P_path = os.path.join(im_ref_dir,"reference","P_{}.npy".format(corr))
             P = torch.from_numpy(np.load(P_path))
@@ -234,6 +237,9 @@ class I24_RCS:
             self.correspondence[corr]["P_reference"] = P
             self.correspondence[corr]["H_reference"] = H
             
+            if torch.isnan(P.sum() + H.sum()):
+                print("No reference hg for {}".format(corr))
+                removals.append(corr)
             # load dynamic P and H
             P_path = os.path.join(im_ref_dir,"dynamic","P_{}.npy".format(corr))
             P = torch.from_numpy(np.load(P_path))
@@ -244,11 +250,14 @@ class I24_RCS:
             self.correspondence[corr]["P_dynamic"] = P
             self.correspondence[corr]["H_dynamic"] = H
             
-            
+            if torch.isnan(P.sum() + H.sum()):
+                print("No dynamic hg for {}".format(corr))
         # hg sec is the seconds between dynamic homographies and hg_start time is the timestamp for the 0th homography
         self.hg_start_time = 0
         self.hg_sec        = 10
         
+        for removal in removals:
+            self.correspondence.pop(removal,None)
         
     def _fit_spline(self,space_dir,use_MM_offset = True):
         """
@@ -954,6 +963,7 @@ class I24_RCS:
                 yel_state = self.space_to_state(yel_space)
                 ys  = yel_state[:,1]
                 
+                # extend and smooth y's
                 width = 1205
                 extend1 = torch.ones((width-1)//2) * ys[0]
                 extend2 = torch.ones((width-1)//2) * ys[-1]
@@ -962,6 +972,8 @@ class I24_RCS:
                 smoother = np.hamming(width)
                 smoother = smoother/ sum(smoother)
                 ys = np.convolve(ys_extended,smoother,mode = "valid")
+                
+                
                 
                 bin_width = 10
                 offsets = np.zeros(3000)
@@ -1145,7 +1157,7 @@ class I24_RCS:
         assert mode in ["P","H"] , "Invalid mode in time_corr: {}".format(mode)
         
         
-        print("Need to verify behavior of time_corr")
+        #print("Need to verify behavior of time_corr")
         
         # deal with single times case - expand into tensor
         if type(times) == float and type(name) == list:
@@ -1203,6 +1215,8 @@ class I24_RCS:
                         mat[m] = self.correspondence[name[m]]["P_static"]
                         if torch.isnan(mat[m].sum()):
                             mat[m] = self.correspondence[name[m]]["P_reference"]
+                            
+
             return mat
         
     # Convenience aliases for time_corr
@@ -1286,7 +1300,7 @@ class I24_RCS:
             return
         
         if refine_heights:
-            template_boxes = self.space_to_im(new_pts,name,times = times)
+            template_boxes = self.space_to_im(new_pts,name = name,times = times)
             heights_new = self.height_from_template(template_boxes, heights, points.view(d,8,3))
             new_pts[:,[4,5,6,7],2] = heights_new.unsqueeze(1).repeat(1,4).double().to(points.device)
             
@@ -1348,7 +1362,6 @@ class I24_RCS:
        return new_pts 
     
     
-    #DEREK YOU ARE HERE
     
     def im_to_space(self,points, name = None,heights = None,classes = None,times = None,refine_heights = True):
         """
@@ -1436,7 +1449,8 @@ class I24_RCS:
         points - [d,m,3] 
         RETURN:  [d,s] array of boxes in state space where s is state size (probably 6)
         """
-        
+        points = points.clone() # deals with yellow line offset issue 
+
         
         # 2. Convert space points to L,W,H,x_back,y_center
         d = points.shape[0]
@@ -1473,7 +1487,7 @@ class I24_RCS:
             
         
         # direction is +1 if vehicle is traveling along direction of increasing x, otherwise -1
-        directions = self.get_direction(points)[1]
+        directions = self.get_direction(points,)[1]
         new_pts[:,5] = directions #torch.sign( ((points[:,0,0] + points[:,1,0]) - (points[:,2,0] + points[:,3,0]))/2.0 ) 
         
 
@@ -1500,13 +1514,14 @@ class I24_RCS:
             
             eb_offsets = self.yellow_offsets["EB"][bins] -12
             wb_offsets = self.yellow_offsets["WB"][bins] +12 
-            eb_mask = torch.where(new_pts[:,5] == 1, 1, 0).to("cpu")
+            eb_mask = torch.where(new_pts[:,1] > 0, 1, 0).to("cpu")
             wb_mask = 1- eb_mask
             
             yellow_offsets = wb_mask * wb_offsets + eb_mask * eb_offsets
             yellow_offsets = yellow_offsets.to(new_pts.device)
             new_pts[:,1] = new_pts[:,1] - yellow_offsets
-
+            #new_pts[:,1] += 3
+            
         # 5. Final state space obtained
         return new_pts
         
@@ -1525,6 +1540,7 @@ class I24_RCS:
         points - [d,s] array of boxes in state space where s is state size (probably 6)
         
         """
+        points = points.clone() # deals with yellow line offset issue 
         
         # 0. Un-offset points by yellow lines
         if self.yellow_offsets is not None:
@@ -1536,12 +1552,13 @@ class I24_RCS:
 
             eb_offsets = self.yellow_offsets["EB"][bins] -12
             wb_offsets = self.yellow_offsets["WB"][bins] +12 
-            eb_mask = torch.where(points[:,5] == 1, 1, 0).to("cpu")
+            eb_mask = torch.where(points[:,1] > 0, 1, 0).to("cpu")
             wb_mask = 1- eb_mask
             
             yellow_offsets = wb_mask * wb_offsets + eb_mask * eb_offsets
             yellow_offsets = yellow_offsets.to(points.device)
-            points[:,1] = points[:,1] + yellow_offsets
+            points[:,1] = points[:,1] + yellow_offsets 
+            #points[:,1] -= 3
         
         # 1. get x-y coordinate of closest point along spline (i.e. v = 0)
         
@@ -1833,13 +1850,57 @@ class I24_RCS:
    
         
     def plot_homography(self,
-                        MEDIAN  = False,
-                        IM_PTS  = False,
-                        FIT_PTS = False,
-                        FOV     = False,
-                        MASK    = False,
-                        Z_AXIS  = False):
-        pass
+                        im,
+                        camera_name):
+        
+        # for each correspondence (1 or 2)
+        for suffix in ["_EB","_WB"]:
+            corr = camera_name + suffix
+            
+            if "space_pts" in self.correspondence[corr].keys():
+                state_plane_pts = torch.from_numpy(self.correspondence[corr]["space_pts"])
+                state_plane_pts = torch.cat((state_plane_pts,torch.zeros([state_plane_pts.shape[0],1])),dim = 1)
+                road_pts = self.space_to_state(state_plane_pts.unsqueeze(1))
+                xmin = torch.min(road_pts[:,0])
+                xmax = torch.max(road_pts[:,0])
+            
+                if suffix == "_EB":
+                    ymin = 12
+                    ymax = 80
+                else:
+                    ymin = -60
+                    ymax = -10
+                
+            else:
+                pass # will write this when I get the new data format for v3 system    
+            
+            #generate grid -this is sloppy and could be tensorized, for which I apologize
+            pts = []
+            for x in np.arange(xmin,xmax,40):
+                for y in np.arange(ymin,ymax,12):
+                    pt = torch.tensor([x,y,0,0,10,torch.sign(torch.tensor(y))])
+                    pts.append(pt)
+            
+            road_grid = torch.stack(pts)
+            im_grid    = self.state_to_im(road_grid,name = corr)
+            
+            
+            for i in range(len(im_grid)):
+                p1 = int(im_grid[i,0,0]),int(im_grid[i,0,1])
+                p2 = int(im_grid[i,4,0]),int(im_grid[i,4,1])
+                color = (255,0,0) if suffix == "_EB" else (0,0,255)
+                cv2.line(im,p1,p2,color,1)
+                cv2.circle(im,p1,5,color,-1)
+
+        
+        cv2.imshow("frame",im)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        
+            
+        
+            
+
     
     
    
@@ -1855,5 +1916,15 @@ if __name__ == "__main__":
         save_path      = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
         
         hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1)
-    
+        hg.save(save_path)
+        #hg.yellow_offsets = None
         
+        im_dir = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/4k"
+        for imf in os.listdir(im_dir):
+            im_path = os.path.join(im_dir,imf)
+            im = cv2.imread(im_path)
+            cam = imf.split(".")[0]
+            try:
+                hg.plot_homography(im,cam)
+            except:
+                pass
