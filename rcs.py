@@ -221,6 +221,7 @@ class I24_RCS:
             H_path = os.path.join(im_ref_dir,"static","H_{}.npy".format(corr))
             H = torch.from_numpy(np.load(H_path))
             
+            #P[:,2] *= -1
             self.correspondence[corr]["P_static"] = P
             self.correspondence[corr]["H_static"] = H
             
@@ -234,6 +235,7 @@ class I24_RCS:
             H_path = os.path.join(im_ref_dir,"reference","H_{}.npy".format(corr))
             H = torch.from_numpy(np.load(H_path))
             
+            #P[:,2] *= -1
             self.correspondence[corr]["P_reference"] = P
             self.correspondence[corr]["H_reference"] = H
             
@@ -247,6 +249,7 @@ class I24_RCS:
             H_path = os.path.join(im_ref_dir,"dynamic","H_{}.npy".format(corr))
             H = torch.from_numpy(np.load(H_path))
             
+            #P[:,2] *= -1
             self.correspondence[corr]["P_dynamic"] = P
             self.correspondence[corr]["H_dynamic"] = H
             
@@ -1796,7 +1799,7 @@ class I24_RCS:
                     elif DRAW[a][b] == 2:
                             im = cv2.line(im,(int(ab[0]),int(ab[1])),(int(bb[0]),int(bb[1])),(0,255,0),thickness)
                     elif DRAW[a][b] == 3:
-                            im = cv2.line(im,(int(ab[0]),int(ab[1])),(int(bb[0]),int(bb[1])),(255,0,0),thickness)
+                            im = cv2.line(im,(int(ab[0]),int(ab[1])),(int(bb[0]),int(bb[1])),(255,255,0),thickness)
                     elif DRAW[a][b] == 4:
                             im = cv2.line(im,(int(ab[0]),int(ab[1])),(int(bb[0]),int(bb[1])),(0,0,255),thickness)
         
@@ -1921,10 +1924,15 @@ if __name__ == "__main__":
         
         im_dir = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/4k"
         for imf in os.listdir(im_dir):
+            if "P35C06" not in imf:
+                continue
+            
             im_path = os.path.join(im_dir,imf)
             im = cv2.imread(im_path)
+            
+
             cam = imf.split(".")[0]
             try:
                 hg.plot_homography(im,cam)
             except:
-                pass
+                print("Error on {}".format(imf))
