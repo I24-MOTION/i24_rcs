@@ -115,7 +115,7 @@ def test_transformation(hg,im_dir):
                  
                  space_pts = torch.from_numpy(corr["space_pts"])
                  space_pts = torch.cat((space_pts,torch.zeros([space_pts.shape[0],1])), dim = -1)
-     
+       
                  im_pts    = torch.from_numpy(corr["corr_pts"]).unsqueeze(1).float()
                  namel = [name for _ in range(len(space_pts))]
      
