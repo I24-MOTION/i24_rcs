@@ -95,7 +95,8 @@ class I24_RCS:
                  save_path,
                  aerial_ref_dir = None,
                  im_ref_dir = None,
-                 downsample = 1):
+                 downsample = 1,
+                 default = "static"):
         """
         Initializes homography object.
         
@@ -114,6 +115,7 @@ class I24_RCS:
         self.polarity = 1
         self.MM_offset = 0
         self.save_file = save_path
+        self.default = default
         
         self.correspondence = {}
         if save_path is not None and os.path.exists(save_path):
@@ -191,8 +193,43 @@ class I24_RCS:
         im_ref_dir - directory of pickle files, each pickle file is a dictionary corresponding to and is loaded into self.correspondence
         """
         
-        # TODO - implemenent once we have an example for what filestructure
-        self.load_correspondences_WACV(im_ref_dir)
+        files = os.listdir(im_ref_dir)
+        for file in files:
+            try:
+                camera_name = re.search("P\d\dC\d\d",file).group(0)
+            except AttributeError:
+                continue
+           
+            if camera_name is not None and ".cpkl" in file:
+                fp = os.path.join(im_ref_dir,file)
+                
+                # parse out relevant data from EB and WB sides
+                with open(fp,"rb") as f:
+                    data = pickle.load(f)
+                    for side in ["EB","WB"]:
+                        side_data = data[side]
+                        if np.isnan(side_data["HR"].sum()):
+                            continue
+                        else:
+                            corr = {}
+                            corr["P_static"] = torch.from_numpy(side_data["PA"])
+                            corr["H_static"] = torch.from_numpy(side_data["HA"])
+                            corr["P_reference"] = torch.from_numpy(side_data["PR"])
+                            corr["H_reference"] = torch.from_numpy(side_data["HR"])
+                            corr["P_dynamic"]   = torch.from_numpy(side_data["P"])
+                            corr["H_dynamic"]   = torch.from_numpy(side_data["H"])
+                            corr["FOV"] = side_data["FOV"]
+                            corr["mask"] = side_data["mask"]
+                                                
+                            
+                            corr_name = "{}_{}".format(camera_name,side)
+                            self.correspondence[corr_name] = corr
+                            
+        self.hg_sec = side_data["time"][1] - side_data["time"][0]
+        self.hg_start_time = side_data["time"][0]            
+            
+        if False: #temporary passthrough
+            self.load_correspondences_WACV(im_ref_dir)
     
         
     def load_correspondences_WACV(self,im_ref_dir):
@@ -209,6 +246,7 @@ class I24_RCS:
         removals = []
         # get all files in 
         for corr in self.correspondence:
+            print(corr)
             
             if "old" in corr:
                 removals.append(corr)
@@ -259,9 +297,13 @@ class I24_RCS:
             
             if torch.isnan(P.sum() + H.sum()):
                 print("No dynamic hg for {}".format(corr))
+                
+            self.correspondence[corr] = copy.deepcopy(self.correspondence[corr])
+
         # hg sec is the seconds between dynamic homographies and hg_start time is the timestamp for the 0th homography
         self.hg_start_time = 0
         self.hg_sec        = 10
+        
         
         for removal in removals:
             self.correspondence.pop(removal,None)
@@ -1182,14 +1224,14 @@ class I24_RCS:
             if mode == "H":
                 if times is not None:
                     mat = self.correspondence[name]["H_dynamic"][tidx]
-                if times is None or torch.isnan(mat.sum()):
+                if times is None or torch.isnan(mat.sum()) or self.default == "static":
                     mat = self.correspondence[name]["H_static"]
                     if torch.isnan(mat.sum()):
                         mat = self.correspondence[name]["H_reference"]
             elif mode == "P":
                 if times is not None:
                     mat = self.correspondence[name]["P_dynamic"][tidx]
-                if times is None or torch.isnan(mat.sum()):
+                if times is None or torch.isnan(mat.sum()) or self.default == "static":
                     mat = self.correspondence[name]["P_static"]
                     if torch.isnan(mat.sum()):
                         mat = self.correspondence[name]["P_reference"]
@@ -1208,7 +1250,7 @@ class I24_RCS:
                     mat = torch.zeros([len(name),3,3]) * torch.nan
                     
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
-                    if torch.isnan(mat[m].sum()):
+                    if torch.isnan(mat[m].sum()) or self.default == "static":
                         mat[m] = self.correspondence[name[m]]["H_static"]
                         if torch.isnan(mat[m].sum()):
                             mat[m] = self.correspondence[name[m]]["H_reference"]
@@ -1218,7 +1260,7 @@ class I24_RCS:
                 else:
                     mat = torch.zeros([len(name),3,4]) * torch.nan
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
-                    if torch.isnan(mat[m].sum()):
+                    if torch.isnan(mat[m].sum()) or self.default == "static":
                         mat[m] = self.correspondence[name[m]]["P_static"]
                         if torch.isnan(mat[m].sum()):
                             mat[m] = self.correspondence[name[m]]["P_reference"]
@@ -1698,7 +1740,12 @@ class I24_RCS:
             elif type(name) == list:
                 new_name = []
                 for n_idx in range(len(name)):
-                    new_name.append(name[n_idx] + "_{}".format(string_direction[n_idx]))
+                    if "C03" in name[n_idx]:
+                        new_name.append(name[n_idx] + "_EB")
+                    elif "C04" in name[n_idx]:
+                        new_name.append(name[n_idx] + "_WB")
+                    else: 
+                        new_name.append(name[n_idx] + "_{}".format(string_direction[n_idx]))
             
         return new_name, direction
     
@@ -1933,6 +1980,9 @@ class I24_RCS:
                     pts.append(pt)
             
             road_grid = torch.stack(pts)
+            
+            
+            
             im_grid    = self.state_to_im(road_grid,name = corr)
             
             
@@ -1942,6 +1992,18 @@ class I24_RCS:
                 color = (255,0,0) if suffix == "_EB" else (0,0,255)
                 cv2.line(im,p1,p2,color,1)
                 cv2.circle(im,p1,5,color,-1)
+
+            if True:
+                for t in range(0,len(self.correspondence[corr]["P_dynamic"])):
+                    ts = [float(t*self.hg_sec + self.hg_start_time) for _ in range(road_grid.shape[0])]
+                    
+                    im_grid = self.state_to_im(road_grid,name= corr, times = ts)
+                    
+                    for i in range(len(im_grid)):
+                        p1 = int(im_grid[i,0,0]),int(im_grid[i,0,1])
+                        p2 = int(im_grid[i,4,0]),int(im_grid[i,4,1])
+                        color = (100,0,0) if suffix == "_EB" else (0,0,255)
+                        cv2.line(im,p1,p2,color,1)
 
         
         cv2.imshow("frame",im)
@@ -1961,19 +2023,21 @@ class I24_RCS:
 #%% MAIN        
     
 if __name__ == "__main__":
-
+    if False:
         aerial_ref_dir = "/home/worklab/Documents/i24/i24_imref/aerial/all_poles_aerial_labels"
         im_ref_dir     = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/wacv_hg_v1"
         save_path      = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
         
-        hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1)
+        hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1,default = "dynamic")
         hg.save(save_path)
+        hg.hg_start_time = 0
+        hg.hg_sec        = 10
         #hg.yellow_offsets = None
         
         im_dir = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/4k"
         for imf in os.listdir(im_dir):
-            if "P35C06" not in imf:
-                continue
+            # if "P35C06" not in imf:
+            #     continue
             
             im_path = os.path.join(im_dir,imf)
             im = cv2.imread(im_path)
@@ -1984,3 +2048,13 @@ if __name__ == "__main__":
                 hg.plot_homography(im,cam)
             except:
                 print("Error on {}".format(imf))
+                
+    if True:
+        rcs_base = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
+        hg_dir = "/home/worklab/Documents/temp_hg_files_for_dev"
+        hg = I24_RCS(save_path = rcs_base)
+        names = list(hg.correspondence.keys())
+        for name in names:
+            hg.correspondence.pop(name,None)
+        #hg.save("rcs_base.cpkl")
+        hg.load_correspondences(hg_dir)
