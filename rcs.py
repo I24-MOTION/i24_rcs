@@ -190,40 +190,45 @@ class I24_RCS:
         
     def load_correspondences(self,im_ref_dir):
         """
-        im_ref_dir - directory of pickle files, each pickle file is a dictionary corresponding to and is loaded into self.correspondence
+        im_ref_dir - directory of directories of pickle files, each pickle file is a dictionary corresponding to and is loaded into self.correspondence
         """
         
-        files = os.listdir(im_ref_dir)
-        for file in files:
-            try:
-                camera_name = re.search("P\d\dC\d\d",file).group(0)
-            except AttributeError:
+        dirs = os.listdir(im_ref_dir)
+        for subdir in dirs:
+            if not os.path.isdir(os.path.join(im_ref_dir,subdir)):
                 continue
-           
-            if camera_name is not None and ".cpkl" in file:
-                fp = os.path.join(im_ref_dir,file)
-                
-                # parse out relevant data from EB and WB sides
-                with open(fp,"rb") as f:
-                    data = pickle.load(f)
-                    for side in ["EB","WB"]:
-                        side_data = data[side]
-                        if np.isnan(side_data["HR"].sum()):
-                            continue
-                        else:
-                            corr = {}
-                            corr["P_static"] = torch.from_numpy(side_data["PA"])
-                            corr["H_static"] = torch.from_numpy(side_data["HA"])
-                            corr["P_reference"] = torch.from_numpy(side_data["PR"])
-                            corr["H_reference"] = torch.from_numpy(side_data["HR"])
-                            corr["P_dynamic"]   = torch.from_numpy(side_data["P"])
-                            corr["H_dynamic"]   = torch.from_numpy(side_data["H"])
-                            corr["FOV"] = side_data["FOV"]
-                            corr["mask"] = side_data["mask"]
-                                                
-                            
-                            corr_name = "{}_{}".format(camera_name,side)
-                            self.correspondence[corr_name] = corr
+            
+            files = os.listdir(os.path.join(im_ref_dir,subdir))
+            for file in files:
+                try:
+                    camera_name = re.search("hg_P\d\dC\d\d",file).group(0)
+                except AttributeError:
+                    continue
+               
+                if camera_name is not None and ".cpkl" in file:
+                    fp = os.path.join(im_ref_dir,subdir,file)
+                    
+                    # parse out relevant data from EB and WB sides
+                    with open(fp,"rb") as f:
+                        data = pickle.load(f)
+                        for side in ["EB","WB"]:
+                            side_data = data[side]
+                            if np.isnan(side_data["HR"].sum()):
+                                continue
+                            else:
+                                corr = {}
+                                corr["P_static"] = torch.from_numpy(side_data["PA"])
+                                corr["H_static"] = torch.from_numpy(side_data["HA"])
+                                corr["P_reference"] = torch.from_numpy(side_data["PR"])
+                                corr["H_reference"] = torch.from_numpy(side_data["HR"])
+                                corr["P_dynamic"]   = torch.from_numpy(side_data["P"])
+                                corr["H_dynamic"]   = torch.from_numpy(side_data["H"])
+                                corr["FOV"] = side_data["FOV"]
+                                corr["mask"] = side_data["mask"]
+                                                    
+                                
+                                corr_name = "{}_{}".format(camera_name,side)
+                                self.correspondence[corr_name] = corr
                             
         self.hg_sec = side_data["time"][1] - side_data["time"][0]
         self.hg_start_time = side_data["time"][0]            
