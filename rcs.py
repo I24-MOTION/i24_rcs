@@ -121,7 +121,7 @@ class I24_RCS:
         if save_path is not None and os.path.exists(save_path):
             with open(save_path,"rb") as f:
                 # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
-                self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets = pickle.load(f)
+                self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets,self.hg_sec,self.hg_start_time = pickle.load(f)
             
             # reload  parameters of curvilinear axis spline
             # rather than the spline itself for better pickle reloading compatibility
@@ -185,7 +185,7 @@ class I24_RCS:
         
     def save(self,save_file):
         with open(save_file,"wb") as f:
-            pickle.dump([self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets],f)
+            pickle.dump([self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets,self.hg_sec,self.hg_start_time],f)
         
         
     def load_correspondences(self,im_ref_dir):
@@ -2056,10 +2056,11 @@ if __name__ == "__main__":
     if True:
         rcs_base = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
         hg_dir = "/home/worklab/Documents/temp_hg_files_for_dev/first_day_hg"
-        hg = I24_RCS(save_path = rcs_base)
+        test_hg = "hg_batch6_test.cpkl"
+        hg = I24_RCS(save_path = test_hg)
         names = list(hg.correspondence.keys())
         for name in names:
             hg.correspondence.pop(name,None)
         #hg.save("rcs_base.cpkl")
         hg.load_correspondences(hg_dir)
-        hg.save("hg_batch6_test.cpkl")
+        #hg.save("hg_batch6_test.cpkl")
