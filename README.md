@@ -5,7 +5,7 @@
 - [X] Add brief instructions
 - [ ] Add description of available data files
 - [X] from i24_rcs import I24_RCS (add alias in init file)
-- [ ] Add WSG84 -> EPSG 2274 conversion
+- [X] Add WSG84 -> EPSG 2274 conversion
 
 
 ## Usage
