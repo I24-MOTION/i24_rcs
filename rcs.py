@@ -96,14 +96,14 @@ class I24_RCS:
                  aerial_ref_dir = None,
                  im_ref_dir = None,
                  downsample = 1,
-                 default = "static"):
+                 default = "dynamic"):
         """
         Initializes homography object.
         
         aerial_ref_dir -None or str - path to directory with csv files of attributes labeled in space coordinates
         im_ref_dir   - None or str - path to directory with cpkl files of attributes labeled in image coordinates
         save_path - None or str - if str, specifies full_path to cached homography object, and no other files are required
-
+        default - str static or dynamic
         downsample 
         
         space_dir - 
@@ -193,41 +193,41 @@ class I24_RCS:
         im_ref_dir - directory of directories of pickle files, each pickle file is a dictionary corresponding to and is loaded into self.correspondence
         """
         
-        dirs = os.listdir(im_ref_dir)
-        for subdir in dirs:
-            if not os.path.isdir(os.path.join(im_ref_dir,subdir)):
-                continue
+        # dirs = os.listdir(im_ref_dir)
+        # for subdir in dirs:
+        #     if not os.path.isdir(os.path.join(im_ref_dir,subdir)):
+        #         continue
             
-            files = glob.glob(os.path.join(im_ref_dir, 'hg_*.cpkl'),recursive = True)
+        files = glob.glob(os.path.join(im_ref_dir, 'hg_*.cpkl'),recursive = True)
+        
+
+        for file in files:
+            # match full name (group(x) gives you the parts inside the parentheses )
+            camera_name = re.match('.*/hg_(P\d\dC\d\d)\.cpkl', file).group(1)
+
+            fp = os.path.join(im_ref_dir,file)
             
-
-            for file in files:
-                # match full name (group(x) gives you the parts inside the parentheses )
-                camera_name = re.match('.*/hg_(P\d\dC\d\d)\.cpkl', file).group(1)
-
-                fp = os.path.join(im_ref_dir,subdir,file)
-                
-                # parse out relevant data from EB and WB sides
-                with open(fp,"rb") as f:
-                    data = pickle.load(f)
-                    for side in ["EB","WB"]:
-                        side_data = data[side]
-                        if np.isnan(side_data["HR"].sum()):
-                            continue
-                        else:
-                            corr = {}
-                            corr["P_static"] = torch.from_numpy(side_data["PA"])
-                            corr["H_static"] = torch.from_numpy(side_data["HA"])
-                            corr["P_reference"] = torch.from_numpy(side_data["PR"])
-                            corr["H_reference"] = torch.from_numpy(side_data["HR"])
-                            corr["P_dynamic"]   = torch.from_numpy(side_data["P"])
-                            corr["H_dynamic"]   = torch.from_numpy(side_data["H"])
-                            corr["FOV"] = side_data["FOV"]
-                            corr["mask"] = side_data["mask"]
-                                                
-                            
-                            corr_name = "{}_{}".format(camera_name,side)
-                            self.correspondence[corr_name] = corr
+            # parse out relevant data from EB and WB sides
+            with open(fp,"rb") as f:
+                data = pickle.load(f)
+                for side in ["EB","WB"]:
+                    side_data = data[side]
+                    if np.isnan(side_data["HR"].sum()):
+                        continue
+                    else:
+                        corr = {}
+                        corr["P_static"] = torch.from_numpy(side_data["PA"])
+                        corr["H_static"] = torch.from_numpy(side_data["HA"])
+                        corr["P_reference"] = torch.from_numpy(side_data["PR"])
+                        corr["H_reference"] = torch.from_numpy(side_data["HR"])
+                        corr["P_dynamic"]   = torch.from_numpy(side_data["P"])
+                        corr["H_dynamic"]   = torch.from_numpy(side_data["H"])
+                        corr["FOV"] = side_data["FOV"]
+                        corr["mask"] = side_data["mask"]
+                                            
+                        
+                        corr_name = "{}_{}".format(camera_name,side)
+                        self.correspondence[corr_name] = corr
                             
         self.hg_sec = side_data["time"][1] - side_data["time"][0]
         self.hg_start_time = side_data["time"][0]            
@@ -2055,10 +2055,11 @@ if __name__ == "__main__":
                 
     if True:
         rcs_base = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
-        hg_dir = "/home/worklab/Documents/temp_hg_files_for_dev"
+        hg_dir = "/home/worklab/Documents/temp_hg_files_for_dev/first_day_hg"
         hg = I24_RCS(save_path = rcs_base)
         names = list(hg.correspondence.keys())
         for name in names:
             hg.correspondence.pop(name,None)
         #hg.save("rcs_base.cpkl")
         hg.load_correspondences(hg_dir)
+        hg.save("hg_batch6_test.cpkl")
