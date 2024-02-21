@@ -119,10 +119,14 @@ class I24_RCS:
         
         self.correspondence = {}
         if save_path is not None and os.path.exists(save_path):
-            with open(save_path,"rb") as f:
-                # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
-                self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets,self.hg_sec,self.hg_start_time = pickle.load(f)
-            
+            try:
+                with open(save_path,"rb") as f:
+                    # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
+                    self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets,self.hg_sec,self.hg_start_time = pickle.load(f)
+            except:
+                with open(save_path,"rb") as f:
+                    # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
+                    self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets = pickle.load(f)
             # reload  parameters of curvilinear axis spline
             # rather than the spline itself for better pickle reloading compatibility
                 
@@ -1223,7 +1227,7 @@ class I24_RCS:
             
             if times is not None:
                 # get time index
-                tidx = int((times[0] - self.hg_start_time) // self.hg_sec)
+                tidx = max(min(0,int((times[0] - self.hg_start_time) // self.hg_sec)),len(self.correspondence[name]["H_dynamic"]))
             
             if mode == "H":
                 if times is not None:
@@ -1245,11 +1249,11 @@ class I24_RCS:
         else:
             # get time index
             if times is not None:
-                tidx = ((times - self.hg_start_time) // self.hg_sec).int()
+                tidx = ((times - self.hg_start_time) // self.hg_sec)
             
             if mode == "H":
                 if times is not None:
-                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["H_dynamic"][tidx[n]] for n in range(len(name))])) 
+                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["H_dynamic"][max(min(0,tidx[n]),len(self.correspondence[name[n]]["H_dynamic"]))] for n in range(len(name))])) 
                 else:
                     mat = torch.zeros([len(name),3,3]) * torch.nan
                     
@@ -1260,7 +1264,7 @@ class I24_RCS:
                             mat[m] = self.correspondence[name[m]]["H_reference"]
             elif mode == "P":
                 if times is not None:
-                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["P_dynamic"][tidx[n]] for n in range(len(name))])) 
+                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["P_dynamic"][max(min(0,tidx[n]),len(self.correspondence[name[n]]["P_dynamic"]))] for n in range(len(name))])) 
                 else:
                     mat = torch.zeros([len(name),3,4]) * torch.nan
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
@@ -2056,7 +2060,7 @@ if __name__ == "__main__":
     if True:
         rcs_base = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
         hg_dir = "/home/worklab/Documents/temp_hg_files_for_dev/first_day_hg"
-        test_hg = "hg_batch6_test.cpkl"
+        test_hg = "/home/worklab/Documents/temp_hg_files_for_dev/hg_batch6_test.cpkl"
         hg = I24_RCS(save_path = test_hg)
         names = list(hg.correspondence.keys())
         for name in names:
