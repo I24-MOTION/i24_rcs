@@ -1227,7 +1227,7 @@ class I24_RCS:
             
             if times is not None:
                 # get time index
-                tidx = max(min(0,int((times[0] - self.hg_start_time) // self.hg_sec)),len(self.correspondence[name]["H_dynamic"]))
+                tidx = min(max(0,int((times[0] - self.hg_start_time) // self.hg_sec)),len(self.correspondence[name]["H_dynamic"])-1)
             
             if mode == "H":
                 if times is not None:
@@ -1253,7 +1253,7 @@ class I24_RCS:
             
             if mode == "H":
                 if times is not None:
-                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["H_dynamic"][max(min(0,tidx[n]),len(self.correspondence[name[n]]["H_dynamic"]))] for n in range(len(name))])) 
+                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["H_dynamic"][min(max(0,tidx[n]),len(self.correspondence[name[n]]["H_dynamic"])-1)] for n in range(len(name))])) 
                 else:
                     mat = torch.zeros([len(name),3,3]) * torch.nan
                     
@@ -1264,7 +1264,7 @@ class I24_RCS:
                             mat[m] = self.correspondence[name[m]]["H_reference"]
             elif mode == "P":
                 if times is not None:
-                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["P_dynamic"][max(min(0,tidx[n]),len(self.correspondence[name[n]]["P_dynamic"]))] for n in range(len(name))])) 
+                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["P_dynamic"][min(max(0,tidx[n]),len(self.correspondence[name[n]]["P_dynamic"])-1)] for n in range(len(name))])) 
                 else:
                     mat = torch.zeros([len(name),3,4]) * torch.nan
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
