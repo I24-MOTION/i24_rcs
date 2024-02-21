@@ -123,10 +123,12 @@ class I24_RCS:
                 with open(save_path,"rb") as f:
                     # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
                     self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets,self.hg_sec,self.hg_start_time = pickle.load(f)
+                    
             except:
                 with open(save_path,"rb") as f:
                     # everything in correspondence is pickleable without object definitions to allow compatibility after class definitions change
                     self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets = pickle.load(f)
+                    
             # reload  parameters of curvilinear axis spline
             # rather than the spline itself for better pickle reloading compatibility
                 
@@ -228,7 +230,7 @@ class I24_RCS:
                         corr["H_dynamic"]   = torch.from_numpy(side_data["H"])
                         corr["FOV"] = side_data["FOV"]
                         corr["mask"] = side_data["mask"]
-                                            
+                        corr["time"] = side_data["time"]
                         
                         corr_name = "{}_{}".format(camera_name,side)
                         self.correspondence[corr_name] = corr
@@ -1227,7 +1229,7 @@ class I24_RCS:
             
             if times is not None:
                 # get time index
-                tidx = min(max(0,int((times[0] - self.hg_start_time) // self.hg_sec)),len(self.correspondence[name]["H_dynamic"])-1)
+                tidx = int(min(max(0,int((times[0] - self.hg_start_time) // self.hg_sec)),len(self.correspondence[name]["H_dynamic"])-1))
             
             if mode == "H":
                 if times is not None:
@@ -1253,7 +1255,7 @@ class I24_RCS:
             
             if mode == "H":
                 if times is not None:
-                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["H_dynamic"][min(max(0,tidx[n]),len(self.correspondence[name[n]]["H_dynamic"])-1)] for n in range(len(name))])) 
+                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["H_dynamic"][int(min(max(0,tidx[n]),len(self.correspondence[name[n]]["H_dynamic"])-1))] for n in range(len(name))])) 
                 else:
                     mat = torch.zeros([len(name),3,3]) * torch.nan
                     
@@ -1264,7 +1266,7 @@ class I24_RCS:
                             mat[m] = self.correspondence[name[m]]["H_reference"]
             elif mode == "P":
                 if times is not None:
-                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["P_dynamic"][min(max(0,tidx[n]),len(self.correspondence[name[n]]["P_dynamic"])-1)] for n in range(len(name))])) 
+                    mat = torch.from_numpy(np.stack([self.correspondence[name[n]]["P_dynamic"][int(min(max(0,tidx[n]),len(self.correspondence[name[n]]["P_dynamic"])-1))] for n in range(len(name))])) 
                 else:
                     mat = torch.zeros([len(name),3,4]) * torch.nan
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
