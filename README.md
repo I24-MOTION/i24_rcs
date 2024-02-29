@@ -13,7 +13,7 @@
 To install: (use v1 tag)
 
     conda activate <desired environment>
-    pip3 install git+https://github.com/DerekGloudemans/i24_rcs@<tag>
+    pip3 install git+https://github.com/I24-MOTION/i24_rcs@<tag>
 
 To uninstall:
   
