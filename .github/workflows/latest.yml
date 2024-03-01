@@ -1,5 +1,7 @@
 name: Create a "latest" tag
+permissions: write-all
 on: [push]
+
 
 jobs:
   run:
