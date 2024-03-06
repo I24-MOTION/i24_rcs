@@ -19,7 +19,7 @@ import string
 import re
 import copy
 import sys
-import json
+import csv
 import matplotlib.pyplot as plt
 
 from scipy import interpolate
@@ -2024,11 +2024,43 @@ class I24_RCS:
         
             
 
-    
-    
-   
-               
-            
+    def gen_report(self,camera_list, outfile = None):
+        
+        headers = ["cam_side","dynamic","static","reference"]
+        lines = []
+        lines.append(headers)
+        print(headers)
+        for cam in camera_list:
+            for side in ["_EB", "_WB"]:
+                camside = cam+side
+                if camside in self.correspondence.keys():
+                    d_pass = 0
+                    d_total = 0
+                    for td in self.correspondence[camside]["P_dynamic"]:
+                        if not np.isnan(td.sum()):
+                            d_pass += 1
+                        d_total += 1
+                    if not np.isnan(self.correspondence[camside]["P_static"].sum()):
+                        s_pass = True
+                    else: s_pass = False
+                    
+                    if not np.isnan(self.correspondence[camside]["P_reference"].sum()):
+                        r_pass = True
+                    else: r_pass = False
+                    
+                    line = [camside,d_pass/d_total,s_pass,r_pass]
+                
+                else:
+                    line = [camside,0,False,False]
+                lines.append(line)
+                print(line)
+                
+        if outfile is not None:    
+            with open(outfile, 'w', newline="\n") as csvfile:
+                writer = csv.writer(csvfile, delimiter=',',
+                                        quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                writer.writerows(lines)
+                    
         
 #%% MAIN        
     
