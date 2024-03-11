@@ -1601,6 +1601,23 @@ class I24_RCS:
         """
         points = points.clone() # deals with yellow line offset issue 
         
+        
+        
+        
+        #### WARNING, this is untested!!!
+        points = points.view(-1,points.shape[-1])
+        
+        d = points.shape[0]
+        
+        try:
+            points[:,5] *= self.polarity
+        except:
+            print("Error in state_to_space, points is of dimension: {}".format(points.shape))
+            return torch.empty([0,8,3], device = points.device)
+        
+        if d == 0:
+            return torch.empty([0,8,3], device = points.device)
+        
         # 0. Un-offset points by yellow lines
         if self.yellow_offsets is not None:
             # shift so that yellow lines have constant y-position
@@ -1619,22 +1636,9 @@ class I24_RCS:
             points[:,1] = points[:,1] + yellow_offsets 
             #points[:,1] -= 3
         
+        
+
         # 1. get x-y coordinate of closest point along spline (i.e. v = 0)
-        
-        #### WARNING, this is untested!!!
-        points = points.view(-1,points.shape[-1])
-        
-        d = points.shape[0]
-        
-        try:
-            points[:,5] *= self.polarity
-        except:
-            print("Error in state_to_space, points is of dimension: {}".format(points.shape))
-            return torch.empty([0,8,3], device = points.device)
-        
-        if d == 0:
-            return torch.empty([0,8,3], device = points.device)
-        
         closest_median_point_x, closest_median_point_y = interpolate.splev(points[:,0].cpu(),self.median_tck)
         
         # 2. get derivative of spline at that point
