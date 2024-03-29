@@ -103,7 +103,7 @@ class I24_RCS:
         aerial_ref_dir -None or str - path to directory with csv files of attributes labeled in space coordinates
         im_ref_dir   - None or str - path to directory with cpkl files of attributes labeled in image coordinates
         save_path - None or str - if str, specifies full_path to cached homography object, and no other files are required
-        default - str static or dynamic
+        default - str static or dynamic or reference
         downsample 
         
         space_dir - 
@@ -1234,16 +1234,16 @@ class I24_RCS:
             if mode == "H":
                 if times is not None:
                     mat = self.correspondence[name]["H_dynamic"][tidx]
-                if times is None or torch.isnan(mat.sum()) or self.default == "static":
+                if times is None or torch.isnan(mat.sum()) or self.default == "static" or self.default == "reference":
                     mat = self.correspondence[name]["H_static"]
-                    if torch.isnan(mat.sum()):
+                    if torch.isnan(mat.sum()) or self.default == "reference":
                         mat = self.correspondence[name]["H_reference"]
             elif mode == "P":
                 if times is not None:
                     mat = self.correspondence[name]["P_dynamic"][tidx]
-                if times is None or torch.isnan(mat.sum()) or self.default == "static":
+                if times is None or torch.isnan(mat.sum()) or self.default == "static" or self.default == "reference":
                     mat = self.correspondence[name]["P_static"]
-                    if torch.isnan(mat.sum()):
+                    if torch.isnan(mat.sum()) or self.default == "reference":
                         mat = self.correspondence[name]["P_reference"]
             return mat
         
@@ -1260,9 +1260,9 @@ class I24_RCS:
                     mat = torch.zeros([len(name),3,3]) * torch.nan
                     
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
-                    if torch.isnan(mat[m].sum()) or self.default == "static":
+                    if torch.isnan(mat[m].sum()) or self.default == "static" or self.default == "reference":
                         mat[m] = self.correspondence[name[m]]["H_static"]
-                        if torch.isnan(mat[m].sum()):
+                        if torch.isnan(mat[m].sum()) or self.default == "reference":
                             mat[m] = self.correspondence[name[m]]["H_reference"]
             elif mode == "P":
                 if times is not None:
@@ -1270,9 +1270,9 @@ class I24_RCS:
                 else:
                     mat = torch.zeros([len(name),3,4]) * torch.nan
                 for m in range(mat.shape[0]): #mat = [d,3,3] tensor, inspect each H matrix
-                    if torch.isnan(mat[m].sum()) or self.default == "static":
+                    if torch.isnan(mat[m].sum()) or self.default == "static" or self.default == "reference":
                         mat[m] = self.correspondence[name[m]]["P_static"]
-                        if torch.isnan(mat[m].sum()):
+                        if torch.isnan(mat[m].sum()) or self.default == "reference":
                             mat[m] = self.correspondence[name[m]]["P_reference"]
                             
 
