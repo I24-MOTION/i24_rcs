@@ -116,6 +116,8 @@ class I24_RCS:
         self.MM_offset = 0
         self.save_file = save_path
         self.default = default
+        self.hg_start_time = 0
+        self.hg_sec        = 10
         
         self.correspondence = {}
         if save_path is not None and os.path.exists(save_path):
@@ -146,10 +148,13 @@ class I24_RCS:
             self.all_splines = None
             self.yellow_offsets = None
             self._fit_spline(aerial_ref_dir)
-
-            if im_ref_dir is not None:
-                self.load_correspondences(im_ref_dir)
+            self.save(save_path)
             
+        if im_ref_dir is not None:
+            try:
+                self.load_correspondences(im_ref_dir)
+            except:
+                self.load_correspondence_old(im_ref_dir)
         # object class info doesn't really belong in homography but it's unclear
         # where else it should go, and this avoids having to pass it around 
         # for use in height estimation
@@ -193,7 +198,50 @@ class I24_RCS:
         with open(save_file,"wb") as f:
             pickle.dump([self.correspondence,self.median_tck,self.median_u,self.guess_tck,self.guess_tck2,self.MM_offset,self.all_splines,self.yellow_offsets,self.hg_sec,self.hg_start_time],f)
         
+      
+    # def load_correspondence_old(self,im_ref_dir):
+    #     """
+    #     im_ref_dir - directory of directories of pickle files, each pickle file is a dictionary corresponding to and is loaded into self.correspondence
+    #     """
         
+    #     # dirs = os.listdir(im_ref_dir)
+    #     # for subdir in dirs:
+    #     #     if not os.path.isdir(os.path.join(im_ref_dir,subdir)):
+    #     #         continue
+            
+    #     files = glob.glob(os.path.join(im_ref_dir, '*.cpkl'),recursive = True)
+        
+
+    #     for file in files:
+    #         # match full name (group(x) gives you the parts inside the parentheses )
+    #         camera_name = re.match('.*/(P\d\dC\d\d)\.cpkl', file).group(1)
+
+    #         fp = os.path.join(im_ref_dir,file)
+            
+    #         # parse out relevant data from EB and WB sides
+    #         with open(fp,"rb") as f:
+    #             data = pickle.load(f)
+    #             for side in ["EB","WB"]:
+    #                 side_data = data[side]
+                
+    #                 corr = {}
+                    
+    #                 corr["P_reference"] = torch.from_numpy(side_data["P"])
+    #                 corr["H_reference"] = torch.from_numpy(side_data["H"])
+
+    #                 corr["FOV"] = side_data["FOV"]
+    #                 corr["mask"] = side_data["mask"]
+                    
+    #                 corr_name = "{}_{}".format(camera_name,side)
+    #                 self.correspondence[corr_name] = corr
+                            
+    #     self.hg_sec = 1
+    #     self.hg_start_time = 0
+            
+    #     if False: #temporary passthrough
+    #         self.load_correspondences_WACV(im_ref_dir)
+            
+            
     def load_correspondences(self,im_ref_dir):
         """
         im_ref_dir - directory of directories of pickle files, each pickle file is a dictionary corresponding to and is loaded into self.correspondence
@@ -371,8 +419,10 @@ class I24_RCS:
                         feature_idx = dataframe["point_id"].tolist()
                         st_id = [attribute_name + "_" + item for item in feature_idx]
                         
-                        st_x = dataframe["st_x"].tolist()
-                        st_y = dataframe["st_y"].tolist()
+                        st_x = dataframe["x"].tolist()
+                        st_y = dataframe["y"].tolist()
+                        #st_x = dataframe["st_x"].tolist()
+                        #st_y = dataframe["st_y"].tolist()
                     
                         ae_x  += st_x
                         ae_y  += st_y
@@ -384,8 +434,10 @@ class I24_RCS:
                         side        = dataframe["side"].tolist()
                         st_id = [attribute_name + str(side[i]) + "_" + str(feature_idx[i]) for i in range(len(feature_idx))]
                         
-                        st_x = dataframe["st_x"].tolist()
-                        st_y = dataframe["st_y"].tolist()
+                        st_x = dataframe["x"].tolist()
+                        st_y = dataframe["y"].tolist()
+                        #st_x = dataframe["st_x"].tolist()
+                        #st_y = dataframe["st_y"].tolist()
                     
                         ae_x  += st_x
                         ae_y  += st_y
@@ -835,7 +887,7 @@ class I24_RCS:
         guess_u2 = interpolate.splev(points[:,1],self.guess_tck2)
         guess_u = (guess_u + guess_u2)/2.0
         
-        guess_u *= 0
+        #guess_u *= 0
         
         
         
@@ -953,8 +1005,8 @@ class I24_RCS:
                     feature_idx = dataframe["point_id"].tolist()
                     st_id = [attribute_name + "_" + item for item in feature_idx]
                     
-                    st_x = dataframe["st_x"].tolist()
-                    st_y = dataframe["st_y"].tolist()
+                    st_x = dataframe["x"].tolist()
+                    st_y = dataframe["y"].tolist()
                 
                     ae_x  += st_x
                     ae_y  += st_y
@@ -966,8 +1018,8 @@ class I24_RCS:
                     side        = dataframe["side"].tolist()
                     st_id = [attribute_name + str(side[i]) + "_" + str(feature_idx[i]) for i in range(len(feature_idx))]
                     
-                    st_x = dataframe["st_x"].tolist()
-                    st_y = dataframe["st_y"].tolist()
+                    st_x = dataframe["x"].tolist()
+                    st_y = dataframe["y"].tolist()
                 
                     ae_x  += st_x
                     ae_y  += st_y
@@ -996,8 +1048,8 @@ class I24_RCS:
                             x_update.append(new_item[0])
                             y_update.append(new_item[1])
                             
-                        dataframe["st_x"] = x_update
-                        dataframe["st_y"] = y_update
+                        dataframe["x"] = x_update
+                        dataframe["y"] = y_update
                         dataframe.to_csv(os.path.join("shifted_aerial_points",file))    
             
                 try:
@@ -1020,6 +1072,11 @@ class I24_RCS:
                 yelx,yely = interpolate.splev(u,tck)
                 yel_space = torch.tensor([yelx,yely,torch.zeros(len(yelx))]).permute(1,0).unsqueeze(1)
                 yel_state = self.space_to_state(yel_space)
+                import matplotlib.pyplot as plt
+
+                plt.plot(yel_state[:,0],yel_state[:,1])
+                plt.show()
+                
                 ys  = yel_state[:,1]
                 
                 # extend and smooth y's
@@ -1035,8 +1092,8 @@ class I24_RCS:
                 
                 
                 bin_width = 10
-                offsets = np.zeros(3000)
-                counts = np.zeros(3000)
+                offsets = np.zeros(10000)
+                counts = np.zeros(10000)
                 
                 for idx in range(len(u)):
                     binidx = int(u[idx]//bin_width)
@@ -1061,123 +1118,123 @@ class I24_RCS:
             self.yellow_offsets = yellow_offsets
             self.save(self.save_file)
         
-        # # 2. for each lane, convert all points to roadway coordinates
+        # 2. for each lane, convert all points to roadway coordinates
         
-        # roadway_data = {}
-        # for key in line_pts.keys():
+        roadway_data = {}
+        for key in line_pts.keys():
             
-        #     if "eb" in key or "EB" in key:
-        #         ymean = 12
-        #         direction = "EB"
-        #     else:
-        #         ymean = -12
-        #         direction = "WB"
+            if "eb" in key or "EB" in key:
+                ymean = 12
+                direction = "EB"
+            else:
+                ymean = -12
+                direction = "WB"
                 
                 
-        #     data = line_pts[key]
-        #     space_data = torch.tensor([data[0],data[1],torch.zeros(len(data[0]))]).permute(1,0).unsqueeze(1)
+            data = line_pts[key]
+            space_data = torch.tensor([data[0],data[1],torch.zeros(len(data[0]))]).permute(1,0).unsqueeze(1)
             
-        #     road_data = self.space_to_state(space_data)
-        #     order = torch.argsort(road_data[:,0])
+            road_data = self.space_to_state(space_data)
+            order = torch.argsort(road_data[:,0])
             
             
-        #     #tck = self.all_splines[direction.upper()+ "_yel_center"][0]
+            #tck = self.all_splines[direction.upper()+ "_yel_center"][0]
             
-        #     # TODO - let's use the black lines we plot as the yellow offset spline since they are obviously right
-        #     # if direction == "WB":
-        #     #     road_data[:,1] = road_data[:,1] - yel_state[:,1] + ymean
-        #     # else:
-        #     if SPLINE_OFFSET:
+            # TODO - let's use the black lines we plot as the yellow offset spline since they are obviously right
+            # if direction == "WB":
+            #     road_data[:,1] = road_data[:,1] - yel_state[:,1] + ymean
+            # else:
+            if SPLINE_OFFSET:
                 
-        #         # tck = self.all_splines["yeli_{}_i".format(direction.upper())][0]
-        #         # yelx,yely = interpolate.splev(road_data[:,0],tck)
-        #         # yel_space = torch.tensor([yelx,yely,torch.zeros(len(yelx))]).permute(1,0).unsqueeze(1)
-        #         # yel_state = self.space_to_state(yel_space)
-        #         #                                         # TODO - let's use the black lines we plot as the yellow offset spline since they are obviously right
-        #         # road_data[:,1] = road_data[:,1] - yel_state[:,1] + ymean
+                # tck = self.all_splines["yeli_{}_i".format(direction.upper())][0]
+                # yelx,yely = interpolate.splev(road_data[:,0],tck)
+                # yel_space = torch.tensor([yelx,yely,torch.zeros(len(yelx))]).permute(1,0).unsqueeze(1)
+                # yel_state = self.space_to_state(yel_space)
+                #                                         # TODO - let's use the black lines we plot as the yellow offset spline since they are obviously right
+                # road_data[:,1] = road_data[:,1] - yel_state[:,1] + ymean
                 
-        #         # new offset style
-        #         road_data_offset_bins = (road_data[:,0] /10).int()
-        #         offsets = yellow_offsets[direction][road_data_offset_bins]
-        #         road_data[:,1] = road_data[:,1] - offsets + ymean
+                # new offset style
+                road_data_offset_bins = (road_data[:,0] /10).int()
+                offsets = yellow_offsets[direction][road_data_offset_bins]
+                road_data[:,1] = road_data[:,1] - offsets + ymean
                 
-        #     roadway_data[key] = road_data[order,:2]
+            roadway_data[key] = road_data[order,:2]
             
-        # # 3. Get mean and stddev for line
-        # for key in roadway_data.keys():
-        #     mean = torch.mean(roadway_data[key][:,1])
-        #     std =  torch.std(roadway_data[key][:,1])
-        #     print("Stats for {}: mean {}, stddev {}".format(key,mean,std))
+        # 3. Get mean and stddev for line
+        for key in roadway_data.keys():
+            mean = torch.mean(roadway_data[key][:,1])
+            std =  torch.std(roadway_data[key][:,1])
+            print("Stats for {}: mean {}, stddev {}".format(key,mean,std))
         
         
         
         
         
-        # import matplotlib.pyplot as plt
-        # plt.figure(figsize = (4,4))
-        # leg= []
-        # leg2 = []
-        # # 5. Plot
+        import matplotlib.pyplot as plt
+        plt.figure(figsize = (4,4))
+        leg= []
+        leg2 = []
+        # 5. Plot
         
-        # for key in roadway_data.keys():
-        #     if "yel" in key:
-        #         color = (1,1,0)
-        #     else:
-        #         color = (0,0,0)
-        #     legentry1 = plt.plot(roadway_data[key][:,0],roadway_data[key][:,1],color = color)
-        #     leg.append(key)
+        for key in roadway_data.keys():
+            if "yel" in key:
+                color = (1,1,0)
+            else:
+                color = (0,0,0)
+            legentry1 = plt.plot(roadway_data[key][:,0],roadway_data[key][:,1],color = color)
+            leg.append(key)
         
-        # if False and self.all_splines:
-        #     for key in self.all_splines.keys():
-        #         if True and "center" not in key:
+        if False and self.all_splines:
+            for key in self.all_splines.keys():
+                if True and "center" not in key:
                     
-        #             if "eb" in key or "EB" in key:
-        #                 ymean = 12
-        #                 direction = "EB"
-        #             else:
-        #                 ymean = -12
-        #                 direction = "WB"
+                    if "eb" in key or "EB" in key:
+                        ymean = 12
+                        direction = "EB"
+                    else:
+                        ymean = -12
+                        direction = "WB"
                     
-        #             spline = self.all_splines[key]
-        #             xs,ys = spline[2],spline[3]
+                    spline = self.all_splines[key]
+                    xs,ys = spline[2],spline[3]
                     
-        #             space_data = torch.tensor([xs,ys,torch.zeros(len(xs))]).permute(1,0).unsqueeze(1)
-        #             state_data = self.space_to_state(space_data)
+                    space_data = torch.tensor([xs,ys,torch.zeros(len(xs))]).permute(1,0).unsqueeze(1)
+                    state_data = self.space_to_state(space_data)
                     
-        #             #tck = self.all_splines[direction.upper()+ "_yel_center"][0]
+                    #tck = self.all_splines[direction.upper()+ "_yel_center"][0]
                     
-        #             if SPLINE_OFFSET:
-        #                 # tck = self.all_splines["yeli_{}_i".format(direction.upper())][0]
-        #                 # yelx,yely = interpolate.splev(state_data[:,0],tck)
-        #                 # yel_space = torch.tensor([yelx,yely,torch.zeros(len(yelx))]).permute(1,0).unsqueeze(1)
-        #                 # yel_state = self.space_to_state(yel_space)
-        #                 # state_data[:,1] = state_data[:,1] - yel_state[:,1] + ymean
+                    if SPLINE_OFFSET:
+                        # tck = self.all_splines["yeli_{}_i".format(direction.upper())][0]
+                        # yelx,yely = interpolate.splev(state_data[:,0],tck)
+                        # yel_space = torch.tensor([yelx,yely,torch.zeros(len(yelx))]).permute(1,0).unsqueeze(1)
+                        # yel_state = self.space_to_state(yel_space)
+                        # state_data[:,1] = state_data[:,1] - yel_state[:,1] + ymean
                         
-        #                 # new offset style
-        #                 road_data_offset_bins = (state_data[:,0]/10).int()
-        #                 offsets = yellow_offsets[direction][road_data_offset_bins]
-        #                 state_data[:,1] = state_data[:,1] - offsets + ymean
+                        # new offset style
+                        road_data_offset_bins = (state_data[:,0]/10).int()
+                        offsets = yellow_offsets[direction][road_data_offset_bins]
+                        state_data[:,1] = state_data[:,1] - offsets + ymean
                     
                     
-        #             xs,ys = state_data[:,0],state_data[:,1]
+                    xs,ys = state_data[:,0],state_data[:,1]
                     
-        #             # try smoothing
-        #             if True:
-        #                 width = 1205
-        #                 extend1 = torch.ones((width-1)//2) * ys[0]
-        #                 extend2 = torch.ones((width-1)//2) * ys[-1]
-        #                 ys_extended = torch.cat([extend1,ys,extend2])
+                    # try smoothing
+                    if True:
+                        width = 1205
+                        extend1 = torch.ones((width-1)//2) * ys[0]
+                        extend2 = torch.ones((width-1)//2) * ys[-1]
+                        ys_extended = torch.cat([extend1,ys,extend2])
     
-        #                 smoother = np.hamming(1205)
-        #                 smoother = smoother/ sum(smoother)
-        #                 ys = np.convolve(ys_extended,smoother,mode = "valid")
+                        smoother = np.hamming(1205)
+                        smoother = smoother/ sum(smoother)
+                        ys = np.convolve(ys_extended,smoother,mode = "valid")
                         
                         
-        #             #xs,ys = interpolate.splev(np.linspace(0,25000,1000),tck)
+                    #xs,ys = interpolate.splev(np.linspace(0,25000,1000),tck)
     
-        #             # sample at 1000 points
-        #             plt.plot(xs,ys,color = (0,0,0))
-        #             leg.append(key)
+                    # sample at 1000 points
+                    plt.plot(xs,ys,color = (0,0,0))
+                    leg.append(key)
         
         # if True:
         #     # for each correspondence, plot all of the image points in roadway coordinates
@@ -1551,7 +1608,7 @@ class I24_RCS:
         
 
         min_u = self.closest_spline_point(new_pts[:,:2])
-        min_u = torch.from_numpy(min_u)
+        min_u = torch.from_numpy(min_u).clamp(min = 0)
         spl_x,spl_y = interpolate.splev(min_u,self.median_tck)
         spl_x,spl_y = torch.from_numpy(spl_x).to(points.device),torch.from_numpy(spl_y).to(points.device)
         min_dist = torch.sqrt((spl_x - new_pts[:,0])**2 + (spl_y - new_pts[:,1])**2)
@@ -1964,41 +2021,61 @@ class I24_RCS:
     def plot_homography(self,
                         im,
                         camera_name):
-        
+        False1 = True
         # for each correspondence (1 or 2)
-        for suffix in ["_EB","_WB"]:
+        for suffix in ["_WB","_EB"]:
             corr = camera_name + suffix
             
-            if "space_pts" in self.correspondence[corr].keys():
-                state_plane_pts = torch.from_numpy(self.correspondence[corr]["space_pts"])
-                state_plane_pts = torch.cat((state_plane_pts,torch.zeros([state_plane_pts.shape[0],1])),dim = 1)
-                road_pts = self.space_to_state(state_plane_pts.unsqueeze(1))
-                xmin = torch.min(road_pts[:,0])
-                xmax = torch.max(road_pts[:,0])
-            
+            if False1:
+                if "space_pts" in self.correspondence[corr].keys():
+                    state_plane_pts = torch.from_numpy(self.correspondence[corr]["space_pts"])
+                    state_plane_pts = torch.cat((state_plane_pts,torch.zeros([state_plane_pts.shape[0],1])),dim = 1)
+                    road_pts = self.space_to_state(state_plane_pts.unsqueeze(1))
+                    xmin = torch.min(road_pts[:,0])
+                    xmax = torch.max(road_pts[:,0])
+                
+                    if suffix == "_EB":
+                        ymin = 12
+                        ymax = 80
+                    else:
+                        ymin = -60
+                        ymax = -10
+                    
+                else:
+                    pass # will write this when I get the new data format for v3 system    
+                
+                #generate grid -this is sloppy and could be tensorized, for which I apologize
+                xmin = 0
+                xmax = 50000
                 if suffix == "_EB":
                     ymin = 12
                     ymax = 80
                 else:
                     ymin = -60
                     ymax = -10
+                    
+                pts = []
+                for x in np.arange(xmin,xmax,40):
+                    for y in np.arange(ymin,ymax,12):
+                        pt = torch.tensor([x,y,0,0,10,torch.sign(torch.tensor(y))])
+                        pts.append(pt)
                 
-            else:
-                pass # will write this when I get the new data format for v3 system    
+                road_grid = torch.stack(pts)
+                
+                
+                
+                im_grid    = self.state_to_im(road_grid,name = corr)
             
-            #generate grid -this is sloppy and could be tensorized, for which I apologize
-            pts = []
-            for x in np.arange(xmin,xmax,40):
-                for y in np.arange(ymin,ymax,12):
-                    pt = torch.tensor([x,y,0,0,10,torch.sign(torch.tensor(y))])
-                    pts.append(pt)
-            
-            road_grid = torch.stack(pts)
-            
-            
-            
-            im_grid    = self.state_to_im(road_grid,name = corr)
-            
+            if False:
+                # replace points with marker points
+                
+                
+                data = pd.read_csv("/home/worklab/Downloads/test_export_markers.csv")
+                points = torch.from_numpy(data[["State X","State Y"]].to_numpy())
+                points = torch.cat((points,torch.zeros([points.shape[0],1])),dim = 1).unsqueeze(1)
+                points = points.contiguous().expand(points.shape[0],8,3).contiguous()
+                
+                im_grid = self.space_to_im(points,name = corr)
             
             for i in range(len(im_grid)):
                 p1 = int(im_grid[i,0,0]),int(im_grid[i,0,1])
@@ -2007,22 +2084,22 @@ class I24_RCS:
                 cv2.line(im,p1,p2,color,1)
                 cv2.circle(im,p1,5,color,-1)
 
-            if True:
-                for t in range(0,len(self.correspondence[corr]["P_dynamic"])):
-                    ts = [float(t*self.hg_sec + self.hg_start_time) for _ in range(road_grid.shape[0])]
+            # if False1:
+            #     for t in range(0,len(self.correspondence[corr]["P_dynamic"])):
+            #         ts = [float(t*self.hg_sec + self.hg_start_time) for _ in range(road_grid.shape[0])]
                     
-                    im_grid = self.state_to_im(road_grid,name= corr, times = ts)
+            #         im_grid = self.state_to_im(road_grid,name= corr, times = ts)
                     
-                    for i in range(len(im_grid)):
-                        p1 = int(im_grid[i,0,0]),int(im_grid[i,0,1])
-                        p2 = int(im_grid[i,4,0]),int(im_grid[i,4,1])
-                        color = (100,0,0) if suffix == "_EB" else (0,0,255)
-                        cv2.line(im,p1,p2,color,1)
+            #         for i in range(len(im_grid)):
+            #             p1 = int(im_grid[i,0,0]),int(im_grid[i,0,1])
+            #             p2 = int(im_grid[i,4,0]),int(im_grid[i,4,1])
+            #             color = (100,0,0) if suffix == "_EB" else (0,0,255)
+            #             cv2.line(im,p1,p2,color,1)
 
         
-        cv2.imshow("frame",im)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+            cv2.imshow("frame",im)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
         
             
         
@@ -2064,7 +2141,73 @@ class I24_RCS:
                 writer = csv.writer(csvfile, delimiter=',',
                                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 writer.writerows(lines)
-                    
+     
+    def _convert_landmarks(self,space_dir):
+        
+         output_path = "save/landmarks.json"
+        
+         file = os.path.join(space_dir,"landmarks.csv")
+        
+         # load relevant data
+         dataframe = pd.read_csv(os.path.join(space_dir,file))
+         st_x = dataframe["X"].tolist()
+         st_y = dataframe["Y"].tolist()
+         st_type = dataframe["type"].tolist()
+         st_location = dataframe["location"].tolist()
+
+         # convert all points into roadway coords
+
+         space_data = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
+         road_data = self.space_to_state(space_data)[:,:2]
+         names = [st_type[i] + "_" + st_location[i] for i in range(len(st_type))]
+         
+         file = os.path.join(space_dir,"poles.csv")
+        
+         # load relevant data
+         dataframe = pd.read_csv(os.path.join(space_dir,file))
+         st_x = dataframe["X"].tolist()
+         st_y = dataframe["Y"].tolist()
+         pole = dataframe["pole-number"].tolist()
+         
+         space_data_pole = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
+         road_data_pole = self.space_to_state(space_data_pole)[:,:2]
+         
+         
+         
+         
+         underpasses = {}
+         overpasses = {}
+         poles = {}
+         
+         for p_idx in range(len(pole)):
+             p_name = pole[p_idx]
+             poles[p_name] = [road_data_pole[p_idx,0].item(), road_data_pole[p_idx,1].item()]
+         
+         for n_idx in range(len(names)):
+             name = names[n_idx]
+             
+             if "under" in name:
+                 try:
+                     underpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
+                 except:
+                     underpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]
+         
+             if "over" in name:
+                 try:
+                     overpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
+                 except:
+                     overpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]   
+         
+         pass
+         # store as JSON of points
+         
+         landmarks = {"overpass":overpasses,
+                      "underpass":underpasses,
+                      "poles":poles
+                      }
+         print(landmarks)
+         with open(output_path,"w") as f:    
+             json.dump(landmarks,f, sort_keys = True)
         
 #%% MAIN        
     
@@ -2095,10 +2238,14 @@ if __name__ == "__main__":
             except:
                 print("Error on {}".format(imf))
                 
-    if True:
+    if False:
         rcs_base = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
         hg_dir = "/home/worklab/Documents/temp_hg_files_for_dev/first_day_hg"
         test_hg = "/home/worklab/Documents/temp_hg_files_for_dev/hg_batch6_test.cpkl"
+        
+        
+        
+        test_hg = "/home/worklab/Downloads/hg_videonode1.cpkl"
         hg = I24_RCS(save_path = test_hg)
         names = list(hg.correspondence.keys())
         for name in names:
@@ -2106,3 +2253,30 @@ if __name__ == "__main__":
         #hg.save("rcs_base.cpkl")
         hg.load_correspondences(hg_dir)
         #hg.save("hg_batch6_test.cpkl")
+        
+        
+        im_dir = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/4k"
+        ims = os.listdir(im_dir)
+        ims.sort()
+        for imf in ims:
+            # if "P35C06" not in imf:
+            #     continue
+            
+            im_path = os.path.join(im_dir,imf)
+            im = cv2.imread(im_path)
+            
+        
+            cam = imf.split(".")[0]
+            try:
+                hg.plot_homography(im,cam)
+            except:
+                print("Error on {}".format(imf))
+        
+    if True:
+        aerial_ref_dir = "/home/worklab/Documents/coordinates_3.0/aerial_ref_3.0"
+        im_ref_dir = None#"/home/worklab/Documents/coordinates_3.0/cam_ref_3.0"
+        save_path = "test.cpkl" #"/home/worklab/Documents/coordinates_3.0/hg_66398b89b9106a6b93e14f82.cpkl"
+        
+        hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1)
+        hg.yellow_offsets = None
+        hg._generate_lane_offset(aerial_ref_dir)
