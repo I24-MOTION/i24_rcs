@@ -21,6 +21,7 @@ import copy
 import sys
 import csv
 import matplotlib.pyplot as plt
+import json
 
 from scipy import interpolate
 
@@ -154,7 +155,12 @@ class I24_RCS:
             try:
                 self.load_correspondences(im_ref_dir)
             except:
-                self.load_correspondence_old(im_ref_dir)
+                aerial_file = os.path.join(aerial_ref_dir,"stateplane_all_points.cpkl")
+                for file in os.listdir(im_ref_dir):
+                    if ".cpkl" not in file: continue
+                    path = os.path.join(im_ref_dir,file)
+                    self.generate_reference(aerial_file, path)
+                    
         # object class info doesn't really belong in homography but it's unclear
         # where else it should go, and this avoids having to pass it around 
         # for use in height estimation
@@ -365,6 +371,198 @@ class I24_RCS:
         
         for removal in removals:
             self.correspondence.pop(removal,None)
+        
+    def generate_reference(self,aerial_file,cam_file):
+       
+        camera = cam_file.split(".cpkl")[0].split("/")[-1]
+
+        # load aerial points
+        with open(aerial_file,"rb") as f:
+            aer_data = pickle.load(f)
+            
+        # load cam points
+        with open(cam_file,"rb") as f:
+            cam_data = pickle.load(f)
+            
+        
+        for direction in ["EB","WB"]:
+            try:
+                im_pts = []
+                aer_pts = []
+                names = []
+                # get matching set of points
+                for point in cam_data[direction]["points"]:
+                    key = point[2]
+                    if key in aer_data.keys():
+                        im_pts.append(point[0:2])
+                        aer_pts.append(aer_data[key])
+                        names.append(key)
+                        
+                # stack pts
+                im_pts = np.stack(im_pts)
+                aer_pts = np.stack(aer_pts)
+            
+                # compute homography
+                cor = {}
+                cor["H"],_     = cv2.findHomography(im_pts,aer_pts)
+                cor["H_inv"],_ = cv2.findHomography(aer_pts,im_pts)
+                vp = cam_data[direction]["z_vp"]
+                
+                # P is a [3,4] matrix 
+                #  column 0 - vanishing point for space x-axis (axis 0) in image coordinates (im_x,im_y,im_scale_factor)
+                #  column 1 - vanishing point for space y-axis (axis 1) in image coordinates (im_x,im_y,im_scale_factor)
+                #  column 2 - vanishing point for space z-axis (axis 2) in image coordinates (im_x,im_y,im_scale_factor)
+                #  column 3 - space origin in image coordinates (im_x,im_y,scale_factor)
+                #  columns 0,1 and 3 are identical to the columns of H, 
+                #  We simply insert the z-axis column (im_x,im_y,1) as the new column 2
+                
+                P = np.zeros([3,4])
+                P[:,0] = cor["H_inv"][:,0]
+                P[:,1] = cor["H_inv"][:,1]
+                P[:,3] = cor["H_inv"][:,2] 
+                P[:,2] = np.array([vp[0],vp[1],1])  * 10e-09
+                cor["P"] = P
+                
+                
+                # fit Z vp
+                self._fit_z_vp(cor,cam_data,direction)
+            
+                
+                
+                # store correspodence - map into format expected by new rcs class which has dynamic, static and reference (but set non-reference as Nan)                
+                
+                corr = {}
+                corr["P_static"] = torch.from_numpy(cor["P"]) * torch.nan
+                corr["H_static"] = torch.from_numpy(cor["H"]) * torch.nan
+                corr["P_reference"] = torch.from_numpy(cor["P"])
+                corr["H_reference"] = torch.from_numpy(cor["H"])
+                corr["P_dynamic"]   = None
+                corr["H_dynamic"]   = None
+                corr["FOV"] = cam_data[direction]["FOV"]
+            
+                if len(cam_data["EB"]["mask"]) > 0:
+                    corr["mask"] = cam_data["EB"]["mask"]
+                else:
+                    corr["mask"] = cam_data["WB"]["mask"]
+                corr["time"] = None
+                
+                corr_name = "{}_{}".format(camera,direction)
+                self.correspondence[corr_name] = corr
+                
+                
+                
+            except:
+                pass
+            
+    def _fit_z_vp(self,cor,im_data,direction):
+        
+        print("fitting Z coordinate scale")
+        
+        P_orig = cor["P"].copy()
+        
+        max_scale = 10000
+        granularity = 1e-12
+        upper_bound = max_scale
+        lower_bound = -max_scale
+        
+        # create a grid of 100 evenly spaced entries between upper and lower bound
+        C_grid = np.linspace(lower_bound,upper_bound,num = 100,dtype = np.float64)
+        step_size = C_grid[1] - C_grid[0]
+        iteration = 1
+        
+        while step_size > granularity:
+            
+            best_error = np.inf
+            best_C = None
+            # for each value of P, get average reprojection error
+            for C in C_grid:
+                
+                # scale P
+                P = P_orig.copy()
+                P[:,2] *= C
+                
+                
+                # search for optimal scaling of z-axis row
+                vp_lines = im_data[direction]["z_vp_lines"]
+                
+                # get bottom point (point # 2)
+                points = torch.stack([ torch.tensor([vpl[2] for vpl in vp_lines]), 
+                                          torch.tensor([vpl[3] for vpl in vp_lines]) ]).transpose(1,0)
+                t_points = torch.stack([ torch.tensor([vpl[0] for vpl in vp_lines]), 
+                                          torch.tensor([vpl[1] for vpl in vp_lines]) ]).transpose(1,0)
+                heights =  torch.tensor([vpl[4] for vpl in vp_lines]).unsqueeze(1)
+    
+                
+                # project to space
+                
+                d = points.shape[0]
+                
+                # convert points into size [dm,3]
+                points = points.view(-1,2).double()
+                points = torch.cat((points,torch.ones([points.shape[0],1],device=points.device).double()),1) # add 3rd row
+                
+                H = torch.from_numpy(cor["H"]).transpose(0,1).to(points.device)
+                new_pts = torch.matmul(points,H)
+                    
+                # divide each point 0th and 1st column by the 2nd column
+                new_pts[:,0] = new_pts[:,0] / new_pts[:,2]
+                new_pts[:,1] = new_pts[:,1] / new_pts[:,2]
+                
+                # drop scale factor column
+                new_pts = new_pts[:,:2] 
+                
+                # reshape to [d,m,2]
+                new_pts = new_pts.view(d,2)
+                
+                # add third column for height
+                new_pts_shifted  = torch.cat((new_pts,heights.double()),1)
+                
+    
+                # add fourth column for scale factor
+                new_pts_shifted  = torch.cat((new_pts_shifted,torch.ones(heights.shape)),1)
+                new_pts_shifted = torch.transpose(new_pts_shifted,0,1).double()
+    
+                # project to image
+                P = torch.from_numpy(P).double().to(points.device)
+                
+    
+                new_pts = torch.matmul(P,new_pts_shifted).transpose(0,1)
+                
+                # divide each point 0th and 1st column by the 2nd column
+                new_pts[:,0] = new_pts[:,0] / new_pts[:,2]
+                new_pts[:,1] = new_pts[:,1] / new_pts[:,2]
+                
+                # drop scale factor column
+                new_pts = new_pts[:,:2] 
+                
+                # reshape to [d,m,2]
+                repro_top = new_pts.view(d,-1,2).squeeze()
+                
+                # get error
+                
+                error = torch.pow((repro_top - t_points),2).sum(dim = 1).sqrt().mean()
+                
+                # if this is the best so far, store it
+                if error < best_error:
+                    best_error = error
+                    best_C = C
+                    
+            
+            # define new upper, lower  with width 2*step_size centered on best value
+            #print("On loop {}: best C so far: {} avg error {}".format(iteration,best_C,best_error))
+            lower_bound = best_C - 2*step_size
+            upper_bound = best_C + 2*step_size
+            C_grid = np.linspace(lower_bound,upper_bound,num = 100,dtype = np.float64)
+            step_size = C_grid[1] - C_grid[0]
+    
+            #print("New C_grid: {}".format(C_grid.round(4)))
+            iteration += 1
+        
+        
+        
+        P_new = P_orig.copy()
+        P_new[:,2] *= best_C
+        cor["P"] = P_new
         
     def _fit_spline(self,space_dir,use_MM_offset = True):
         """
@@ -2102,8 +2300,28 @@ class I24_RCS:
             cv2.destroyAllWindows()
         
             
+    def gen_FOVs(self):
+        cam_extents = {}
+        for corr in self.correspondence.keys():
+                    # get extents
+                    pts = hg.correspondence[corr]["FOV"]
+                    pts = torch.from_numpy(np.array(pts))
+                    pts = pts.unsqueeze(1).expand(pts.shape[0],8,2)
+                    pts_road = hg.im_to_state(pts,name = [corr for _ in pts],heights = torch.zeros(pts.shape[0]))
+                    
+                    
+                    
+                    minx = torch.min(pts_road[:,0]).item()
+                    maxx = torch.max(pts_road[:,0]).item()
+                    miny = torch.min(pts_road[:,1]).item()
+                    maxy = torch.max(pts_road[:,1]).item()
+                    
+                    
+                
+                    cam_extents[corr] = [minx,maxx,miny,maxy]
         
-            
+        with open("extents.json","w") as f:    
+            json.dump(cam_extents,f, sort_keys = True)
 
     def gen_report(self,camera_list, outfile = None):
         
@@ -2144,7 +2362,7 @@ class I24_RCS:
      
     def _convert_landmarks(self,space_dir):
         
-         output_path = "save/landmarks.json"
+         output_path = "landmarks.json"
         
          file = os.path.join(space_dir,"landmarks.csv")
         
@@ -2274,9 +2492,8 @@ if __name__ == "__main__":
         
     if True:
         aerial_ref_dir = "/home/worklab/Documents/coordinates_3.0/aerial_ref_3.0"
-        im_ref_dir = None#"/home/worklab/Documents/coordinates_3.0/cam_ref_3.0"
-        save_path = "test.cpkl" #"/home/worklab/Documents/coordinates_3.0/hg_66398b89b9106a6b93e14f82.cpkl"
+        im_ref_dir = "/home/worklab/Documents/coordinates_3.0/cam_ref_3.0"
+        save_path = "/home/worklab/Documents/coordinates_3.0/hg_664538e4b476f991aef3d7eb.cpkl"
+        hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1,default = "reference")
         
-        hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1)
-        hg.yellow_offsets = None
-        hg._generate_lane_offset(aerial_ref_dir)
+        
