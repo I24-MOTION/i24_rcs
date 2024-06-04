@@ -2299,8 +2299,188 @@ class I24_RCS:
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         
-            
-    def gen_FOVs(self):
+    def gen_geom(self,space_dir,rcs_version_number = "XX"):
+        """
+        Generates the geometry .json file for an RCS coordinate system. 
+        
+        output:
+            dict with
+            landmarks - 
+            detectors - 
+            gantries - 
+            milemarkers - 
+            poles - 
+            rcs_extents - 
+            rcs_extents_st - 
+            offset - the rcs x-coordinate of the "magic" reference point (originally this point was the location of MM60 but this may not always be the case if the milemarker is moved)
+                        this offset is used to rectify outside MM-based systems with the internal RCS
+        """
+                
+       
+        # load landmark data
+        file = os.path.join(space_dir,"landmarks.csv")
+
+        dataframe = pd.read_csv(os.path.join(space_dir,file))
+        st_x = dataframe["x"].tolist()
+        st_y = dataframe["y"].tolist()
+        st_type = dataframe["type"].tolist()
+        st_location = dataframe["location"].tolist()
+
+        # convert all points into roadway coords
+        space_data = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
+        road_data = self.space_to_state(space_data)[:,:2]
+        names = [st_type[i] + "_" + st_location[i] for i in range(len(st_type))]
+        
+        underpasses = {}
+        overpasses = {}
+       
+        for n_idx in range(len(names)):
+           name = names[n_idx]
+           
+           if "under" in name:
+               try:
+                   underpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
+               except:
+                   underpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]
+       
+           if "over" in name:
+               try:
+                   overpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
+               except:
+                   overpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]   
+        
+        
+       
+        # load pole data
+        file = os.path.join(space_dir,"poles.csv")
+
+        dataframe = pd.read_csv(os.path.join(space_dir,file))
+        st_x = dataframe["x"].tolist()
+        st_y = dataframe["y"].tolist()
+        pole = dataframe["pole-number"].tolist()
+        
+        space_data_pole = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
+        road_data_pole = self.space_to_state(space_data_pole)[:,:2]
+        
+        poles = {}
+        
+        for p_idx in range(len(pole)):
+            p_name = pole[p_idx]
+            poles[p_name] = [road_data_pole[p_idx,0].item(), road_data_pole[p_idx,1].item()]
+        
+        
+        
+        
+        
+        
+        # load milemarker data
+        file = os.path.join(space_dir,"milemarker.csv")
+
+        # load all points
+        dataframe = pd.read_csv(file)
+        dataframe = dataframe[dataframe['point_id'].notnull()]
+        
+        mm = dataframe["milemarker"].tolist()
+        st_x = dataframe["x"].tolist()
+        st_y = dataframe["y"].tolist()
+        
+        # convert each state plane  point into roadway
+        mm_space = torch.tensor([st_x,st_y,[0 for _ in range(len(st_x))]]).transpose(1,0)
+        mm_space = mm_space.unsqueeze(1).expand(mm_space.shape[0],8,3)
+        mm_state = self.space_to_state(mm_space)[:,:2]
+        
+        milemarkers = {}
+        for midx,m in enumerate(mm):
+            milemarkers[m] = [mm_state[midx,0].item(),mm_state[midx,1].item()]        
+        
+        
+        
+        
+        # load gantry data
+        file = os.path.join(space_dir,"gantries.csv")
+
+        # load all points
+        dataframe = pd.read_csv(file)
+        dataframe = dataframe[dataframe['x'].notnull()]
+        
+        mm = dataframe["tdot_milemarker"].tolist()
+        direction = dataframe["road_side"].tolist()
+        st_x = dataframe["x"].tolist()
+        st_y = dataframe["y"].tolist()
+        
+        # convert each state plane  point into roadway
+        mm_space = torch.tensor([st_x,st_y,[0 for _ in range(len(st_x))]]).transpose(1,0)
+        mm_space = mm_space.unsqueeze(1).expand(mm_space.shape[0],8,3)
+        mm_state = self.space_to_state(mm_space)[:,:2]
+        
+        # get names
+        gantry_names = [str(mm[m])+ "_" + str(direction[m]) for m in range(len(mm))]
+        gantries_w = {}
+        gantries_e = {}
+        
+        for gidx,g in enumerate(gantry_names):
+            if "e" in g:
+                gantries_e[g] = [mm_state[gidx,0].item(),mm_state[gidx,1].item()] 
+            else:
+                gantries_w[g] = [mm_state[gidx,0].item(),mm_state[gidx,1].item()] 
+        
+        
+        
+        
+        # load detector data
+        file = os.path.join(space_dir,"detectors.csv")
+
+        # load all points
+        dataframe = pd.read_csv(file)
+        dataframe = dataframe[dataframe['x'].notnull()]
+        
+        mm = dataframe["tdot_milemarker"].tolist()
+        direction = dataframe["road_side"].tolist()
+        st_x = dataframe["x"].tolist()
+        st_y = dataframe["y"].tolist()
+        
+        # convert each state plane  point into roadway
+        mm_space = torch.tensor([st_x,st_y,[0 for _ in range(len(st_x))]]).transpose(1,0)
+        mm_space = mm_space.unsqueeze(1).expand(mm_space.shape[0],8,3)
+        mm_state = self.space_to_state(mm_space)[:,:2]
+        
+        # get names
+        detector_names = [str(mm[m])+ "_" + str(direction[m]) for m in range(len(mm))]
+        detectors = {}
+        for didx,d in enumerate(gantry_names):
+            detectors[d] = [mm_state[didx,0].item(),mm_state[didx,1].item()] 
+        
+        # generate rcs extents
+        rcs_extents = self.median_u[[0,-1]]
+        
+        extst  = torch.from_numpy(rcs_extents).unsqueeze(1)
+        extst  = torch.cat((extst,torch.zeros(extst.shape[0],5)),dim = 1)
+        st_extents = self.state_to_space(extst)[:,0,:2].tolist()
+        rcs_extents = rcs_extents.tolist()
+        
+        # generate magic number
+        to_tdot_mm = milemarkers[60.0][0]
+        in_feet = 60.0*5280
+        magic_offset = [to_tdot_mm,in_feet]
+        
+        # save all
+        geometry = { "overpass":overpasses,
+                     "underpass":underpasses,
+                     "poles":poles,
+                     "milemarkers": milemarkers,
+                     "gantries_e":gantries_e,
+                     "gantries_w":gantries_w,
+                     "detectors":detectors,
+                     "rcs_extents":rcs_extents,
+                     "state_extents":st_extents,
+                     "mm60_offset":magic_offset
+                     }
+        
+        output_path = os.path.join(space_dir,"rcs_{}_geom.json".format(rcs_version_number))
+        with open(output_path,"w") as f:    
+                  json.dump(geometry,f, sort_keys = True)
+        
+    def gen_extents(self):
         cam_extents = {}
         for corr in self.correspondence.keys():
                     # get extents
@@ -2360,72 +2540,72 @@ class I24_RCS:
                                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 writer.writerows(lines)
      
-    def _convert_landmarks(self,space_dir):
+    # def _convert_landmarks(self,space_dir):
         
-         output_path = "landmarks.json"
+    #      output_path = "landmarks.json"
         
-         file = os.path.join(space_dir,"landmarks.csv")
+    #      file = os.path.join(space_dir,"landmarks.csv")
         
-         # load relevant data
-         dataframe = pd.read_csv(os.path.join(space_dir,file))
-         st_x = dataframe["X"].tolist()
-         st_y = dataframe["Y"].tolist()
-         st_type = dataframe["type"].tolist()
-         st_location = dataframe["location"].tolist()
+    #      # load relevant data
+    #      dataframe = pd.read_csv(os.path.join(space_dir,file))
+    #      st_x = dataframe["X"].tolist()
+    #      st_y = dataframe["Y"].tolist()
+    #      st_type = dataframe["type"].tolist()
+    #      st_location = dataframe["location"].tolist()
 
-         # convert all points into roadway coords
+    #      # convert all points into roadway coords
 
-         space_data = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
-         road_data = self.space_to_state(space_data)[:,:2]
-         names = [st_type[i] + "_" + st_location[i] for i in range(len(st_type))]
+    #      space_data = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
+    #      road_data = self.space_to_state(space_data)[:,:2]
+    #      names = [st_type[i] + "_" + st_location[i] for i in range(len(st_type))]
          
-         file = os.path.join(space_dir,"poles.csv")
+    #      file = os.path.join(space_dir,"poles.csv")
         
-         # load relevant data
-         dataframe = pd.read_csv(os.path.join(space_dir,file))
-         st_x = dataframe["X"].tolist()
-         st_y = dataframe["Y"].tolist()
-         pole = dataframe["pole-number"].tolist()
+    #      # load relevant data
+    #      dataframe = pd.read_csv(os.path.join(space_dir,file))
+    #      st_x = dataframe["X"].tolist()
+    #      st_y = dataframe["Y"].tolist()
+    #      pole = dataframe["pole-number"].tolist()
          
-         space_data_pole = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
-         road_data_pole = self.space_to_state(space_data_pole)[:,:2]
-         
-         
+    #      space_data_pole = torch.tensor([st_x,st_y,torch.zeros(len(st_x))]).permute(1,0).unsqueeze(1)
+    #      road_data_pole = self.space_to_state(space_data_pole)[:,:2]
          
          
-         underpasses = {}
-         overpasses = {}
-         poles = {}
          
-         for p_idx in range(len(pole)):
-             p_name = pole[p_idx]
-             poles[p_name] = [road_data_pole[p_idx,0].item(), road_data_pole[p_idx,1].item()]
          
-         for n_idx in range(len(names)):
-             name = names[n_idx]
+    #      underpasses = {}
+    #      overpasses = {}
+    #      poles = {}
+         
+    #      for p_idx in range(len(pole)):
+    #          p_name = pole[p_idx]
+    #          poles[p_name] = [road_data_pole[p_idx,0].item(), road_data_pole[p_idx,1].item()]
+         
+    #      for n_idx in range(len(names)):
+    #          name = names[n_idx]
              
-             if "under" in name:
-                 try:
-                     underpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
-                 except:
-                     underpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]
+    #          if "under" in name:
+    #              try:
+    #                  underpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
+    #              except:
+    #                  underpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]
          
-             if "over" in name:
-                 try:
-                     overpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
-                 except:
-                     overpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]   
+    #          if "over" in name:
+    #              try:
+    #                  overpasses[name.split("_")[2]].append(road_data[n_idx,0].item())
+    #              except:
+    #                  overpasses[name.split("_")[2]] = [road_data[n_idx,0].item()]   
          
-         pass
-         # store as JSON of points
+    #      pass
+    #      # store as JSON of points
          
-         landmarks = {"overpass":overpasses,
-                      "underpass":underpasses,
-                      "poles":poles
-                      }
-         print(landmarks)
-         with open(output_path,"w") as f:    
-             json.dump(landmarks,f, sort_keys = True)
+    #      landmarks = {"overpass":overpasses,
+    #                   "underpass":underpasses,
+    #                   "poles":poles
+    #                   }
+    #      print(landmarks)
+    #      with open(output_path,"w") as f:    
+    #          json.dump(landmarks,f, sort_keys = True)
         
 #%% MAIN        
     
@@ -2492,8 +2672,9 @@ if __name__ == "__main__":
         
     if True:
         aerial_ref_dir = "/home/worklab/Documents/coordinates_3.0/aerial_ref_3.0"
-        im_ref_dir = "/home/worklab/Documents/coordinates_3.0/cam_ref_3.0"
-        save_path = "/home/worklab/Documents/coordinates_3.0/hg_664538e4b476f991aef3d7eb.cpkl"
+        im_ref_dir = None #"/home/worklab/Documents/coordinates_3.0/cam_ref_3.0"
+        #save_path = "/home/worklab/Documents/coordinates_3.0/hg_664538e4b476f991aef3d7eb.cpkl"
+        save_path = "/home/worklab/Documents/i24/i24_rcs/test.cpkl"
         hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1,default = "reference")
-        
+        hg.gen_geom(aerial_ref_dir,rcs_version_number="3-0")
         
