@@ -272,6 +272,10 @@ if __name__ == "__main__":
      save_path      = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/WACV2024_hg_save.cpkl"
      im_dir         = "/home/worklab/Documents/i24/fast-trajectory-annotator/final_dataset_preparation/4k"
      
+     
+     save_path = "/home/worklab/Documents/coordinates_3.0/hg_66398b89b9106a6b93e14f82.cpkl"
+     im_dir    = "/home/worklab/Documents/coordinates_3.0/cam_ref_3.0/4k"
+     
      hg = I24_RCS(save_path = save_path,downsample = 1)
      #hg.yellow_offsets = None
      

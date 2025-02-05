@@ -2479,6 +2479,14 @@ class I24_RCS:
         output_path = os.path.join(space_dir,"rcs_{}_geom.json".format(rcs_version_number))
         with open(output_path,"w") as f:    
                   json.dump(geometry,f, sort_keys = True)
+                  
+        
+        for name in poles:
+            polex = poles[name][0]
+            
+            polemm = 60  + (polex - to_tdot_mm )/5280
+            
+            print(name, np.round(polemm,1))
         
     def gen_extents(self):
         cam_extents = {}
@@ -2675,6 +2683,7 @@ if __name__ == "__main__":
         im_ref_dir = None #"/home/worklab/Documents/coordinates_3.0/cam_ref_3.0"
         #save_path = "/home/worklab/Documents/coordinates_3.0/hg_664538e4b476f991aef3d7eb.cpkl"
         save_path = "/home/worklab/Documents/i24/i24_rcs/test.cpkl"
+        #save_path = None
         hg = I24_RCS(save_path = save_path,aerial_ref_dir = aerial_ref_dir, im_ref_dir = im_ref_dir,downsample = 1,default = "reference")
         hg.gen_geom(aerial_ref_dir,rcs_version_number="3-0")
         
