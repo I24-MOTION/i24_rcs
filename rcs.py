@@ -2489,27 +2489,29 @@ class I24_RCS:
             print(name, np.round(polemm,1))
         
     def gen_extents(self):
-        cam_extents = {}
-        for corr in self.correspondence.keys():
-                    # get extents
-                    pts = hg.correspondence[corr]["FOV"]
-                    pts = torch.from_numpy(np.array(pts))
-                    pts = pts.unsqueeze(1).expand(pts.shape[0],8,2)
-                    pts_road = hg.im_to_state(pts,name = [corr for _ in pts],heights = torch.zeros(pts.shape[0]))
-                    
-                    
-                    
-                    minx = torch.min(pts_road[:,0]).item()
-                    maxx = torch.max(pts_road[:,0]).item()
-                    miny = torch.min(pts_road[:,1]).item()
-                    maxy = torch.max(pts_road[:,1]).item()
-                    
-                    
-                
-                    cam_extents[corr] = [minx,maxx,miny,maxy]
-        
-        with open("extents.json","w") as f:    
-            json.dump(cam_extents,f, sort_keys = True)
+         cam_extents = {}
+         for corr in self.correspondence.keys():
+                     # get extents
+                     pts = self.correspondence[corr]["FOV"]
+                     pts = torch.from_numpy(np.array(pts))
+                     pts = pts.unsqueeze(1).expand(pts.shape[0],8,2)
+                     pts_road = self.im_to_state(pts,name = [corr for _ in pts],heights = torch.zeros(pts.shape[0]))
+                     
+                     
+                     
+                     minx = torch.min(pts_road[:,0]).item()
+                     maxx = torch.max(pts_road[:,0]).item()
+                     miny = torch.min(pts_road[:,1]).item()
+                     maxy = torch.max(pts_road[:,1]).item()
+                     
+                     
+                 
+                     cam_extents[corr] = [minx,maxx,miny,maxy]
+         
+         
+         with open("extents.json","w") as f:    
+             json.dump(cam_extents,f, sort_keys = True)
+         return cam_extents
 
     def gen_report(self,camera_list, outfile = None):
         
