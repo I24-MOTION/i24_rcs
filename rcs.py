@@ -1737,7 +1737,7 @@ class I24_RCS:
         space_pts = self.im_to_space(points,name = name, classes = classes, times = times, heights = heights,refine_heights = refine_heights)
         return self.space_to_state(space_pts)
     
-    def state_to_im(self,points,name = None,times = None):
+    def state_to_im(self,points,name = None,times = None,rotation = None):
         """
         Converts roadway coordinate boxes to image space boxes
         points    - [d,s] array of boxes in state space where s is state size (probably 6)
@@ -1745,7 +1745,7 @@ class I24_RCS:
         times     - None or float or [float] - time or times for positions   
         RETURN:   - [d,m,2] array of points in image
         """
-        space_pts = self.state_to_space(points)
+        space_pts = self.state_to_space(points,rotation = None)
         return self.space_to_im(space_pts,name = name,times = times)
     
     def space_to_state(self,points):
@@ -1839,7 +1839,7 @@ class I24_RCS:
         # 5. Final state space obtained
         return new_pts
         
-    def state_to_space(self,points):
+    def state_to_space(self,points,rotation = None):
         """
         Conversion from state plane coordinates to roadway coordinates via the following steps:
             1. get x-y coordinate of closest point along spline (i.e. v = 0)
@@ -1949,6 +1949,20 @@ class I24_RCS:
         new_pts[:,[0,2],1] += y_shift_w.unsqueeze(1).expand(d,2)
         new_pts[:,[1,3],0] -= x_shift_w.unsqueeze(1).expand(d,2)
         new_pts[:,[1,3],1] -= y_shift_w.unsqueeze(1).expand(d,2)
+        
+        
+        if rotation is not None:
+            #qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+            #qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+            origin = new_pts[:,[2,3],:].mean(dim = 1).clone()
+            ox = origin[:,0].unsqueeze(1).expand(new_pts.shape[0],new_pts.shape[1]) 
+            oy = origin[:,1].unsqueeze(1).expand(new_pts.shape[0],new_pts.shape[1]) 
+            ang_exp = rotation.unsqueeze(1).expand(new_pts.shape[0],new_pts.shape[1]) * np.pi/180
+            new_x = ox + torch.cos(ang_exp) * (new_pts[:,:,0]-ox) - torch.sin(ang_exp) * (new_pts[:,:,1]-oy)
+            new_y = oy + torch.sin(ang_exp) * (new_pts[:,:,0]-ox) + torch.cos(ang_exp) * (new_pts[:,:,1]-oy)
+            
+            new_pts[:,:,0] = new_x
+            new_pts[:,:,1] = new_y
     
         #6. Add top points
         top_pts = new_pts.clone()
@@ -2182,7 +2196,7 @@ class I24_RCS:
             
         return im
         
-    def plot_state_boxes(self,im,boxes,times = None,color = (255,255,255),labels = None, thickness = 1, name = None, size = 2):
+    def plot_state_boxes(self,im,boxes,times = None,color = (255,255,255),labels = None, thickness = 1, name = None, size = 2, rotation = None):
         """
         Wraps plot_boxes for state boxes by first converting from state (roadway coordinates) to image coordinates
         times     - None or float or [float] - time or times for positions   
