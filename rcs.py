@@ -2118,7 +2118,7 @@ class I24_RCS:
     
     #%% Plotting Functions
     
-    def plot_boxes(self,im,boxes,color = (255,255,255),labels = None,thickness = 1, ORIGIN = True):
+    def plot_boxes(self,im,boxes,color = (255,255,255),labels = None,thickness = 1, ORIGIN = True,size = 2):
         """
         As one might expect, plots 3D boxes on input image
         
@@ -2171,8 +2171,8 @@ class I24_RCS:
                 label = labels[idx]
                 left  = bbox_3d[0,0]
                 top   = bbox_3d[0,1]
-                im    = cv2.putText(im,"{}".format(label),(int(left),int(top - 10)),cv2.FONT_HERSHEY_PLAIN,2,(0,0,0),3)
-                im    = cv2.putText(im,"{}".format(label),(int(left),int(top - 10)),cv2.FONT_HERSHEY_PLAIN,2,(255,255,255),1)
+                im    = cv2.putText(im,"{}".format(label),(int(left),int(top - 10)),cv2.FONT_HERSHEY_PLAIN,size,(0,0,0),3)
+                im    = cv2.putText(im,"{}".format(label),(int(left),int(top - 10)),cv2.FONT_HERSHEY_PLAIN,size,(255,255,255),1)
             
             # draw origin
             if ORIGIN:
@@ -2182,13 +2182,13 @@ class I24_RCS:
             
         return im
         
-    def plot_state_boxes(self,im,boxes,times = None,color = (255,255,255),labels = None, thickness = 1, name = None):
+    def plot_state_boxes(self,im,boxes,times = None,color = (255,255,255),labels = None, thickness = 1, name = None, size = 2):
         """
         Wraps plot_boxes for state boxes by first converting from state (roadway coordinates) to image coordinates
         times     - None or float or [float] - time or times for positions   
         """
         im_boxes = self.state_to_im(boxes, name = name,times = times)
-        return self.plot_boxes(im,im_boxes,color = color,labels = labels, thickness = thickness)
+        return self.plot_boxes(im,im_boxes,color = color,labels = labels, thickness = thickness,size = size)
     
     def plot_points(self,im,points,times = None, color = (0,255,0)):
         """
