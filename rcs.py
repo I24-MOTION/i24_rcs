@@ -1745,7 +1745,7 @@ class I24_RCS:
         times     - None or float or [float] - time or times for positions   
         RETURN:   - [d,m,2] array of points in image
         """
-        space_pts = self.state_to_space(points,rotation = None)
+        space_pts = self.state_to_space(points,rotation = rotation)
         return self.space_to_im(space_pts,name = name,times = times)
     
     def space_to_state(self,points):
@@ -2201,7 +2201,7 @@ class I24_RCS:
         Wraps plot_boxes for state boxes by first converting from state (roadway coordinates) to image coordinates
         times     - None or float or [float] - time or times for positions   
         """
-        im_boxes = self.state_to_im(boxes, name = name,times = times)
+        im_boxes = self.state_to_im(boxes, name = name,times = times,rotation = rotation)
         return self.plot_boxes(im,im_boxes,color = color,labels = labels, thickness = thickness,size = size)
     
     def plot_points(self,im,points,times = None, color = (0,255,0)):
