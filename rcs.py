@@ -289,8 +289,13 @@ class I24_RCS:
                         corr_name = "{}_{}".format(camera_name,side)
                         self.correspondence[corr_name] = corr
                             
-        self.hg_sec = side_data["time"][1] - side_data["time"][0]
-        self.hg_start_time = side_data["time"][0]            
+        try:
+            self.hg_sec = side_data["time"][1] - side_data["time"][0]
+            self.hg_start_time = side_data["time"][0]         
+        except:
+            print("WARNING: hg_sec and hg_start_time were not set , likely dynamic homography generation has failed. Using defaults of 0, 10 sec")    
+            self.hg_sec = 10
+            self.hg_start_time = 0 
             
         if False: #temporary passthrough
             self.load_correspondences_WACV(im_ref_dir)
