@@ -1475,7 +1475,12 @@ class I24_RCS:
         """
         assert mode in ["P","H"] , "Invalid mode in time_corr: {}".format(mode)
         
-        
+        # this is attempting to fix the case where dynamic hg generation failed
+        try:
+            self.correspondence[name]["P_dynamic"][2]
+        except:
+            times = None
+            
         #print("Need to verify behavior of time_corr")
         
         # deal with single times case - expand into tensor
@@ -2015,7 +2020,12 @@ class I24_RCS:
             angle = torch.atan2( vec_A[0]*vec_B[1] - vec_A[1]*vec_B[0], vec_A[0]*vec_B[0] + vec_A[1]*vec_B[1] )
             direction =  -1* torch.sign(angle).int().to(points.device)
         
-        d_list = ["dummy which should never appear","EB","WB"]
+        # check for exact zeros
+        zeros = torch.where(direction ==0,1,0).nonzero().squeeze(1)
+        for idx in zeros:
+            print("WARNING: {} returned detection exactly at y=0. Assuming WB direction".format(name[idx]))
+        
+        d_list = ["WB","EB","WB"]
         string_direction = [d_list[di.item()] for di in direction]
         
     
