@@ -2021,9 +2021,10 @@ class I24_RCS:
             direction =  -1* torch.sign(angle).int().to(points.device)
         
         # check for exact zeros
-        zeros = torch.where(direction ==0,1,0).nonzero().squeeze(1)
-        for idx in zeros:
-            print("WARNING: {} returned detection exactly at y=0. Assuming WB direction".format(name[idx]))
+        if type(name) == list:
+            zeros = torch.where(direction ==0,1,0).nonzero().squeeze(1)
+            for idx in zeros:
+                print("WARNING: {} returned detection exactly at y=0. Assuming WB direction".format(name[idx]))
         
         d_list = ["WB","EB","WB"]
         string_direction = [d_list[di.item()] for di in direction]
