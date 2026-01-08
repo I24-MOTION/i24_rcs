@@ -67,3 +67,23 @@ In most cases, the new boxes should be within a few hundredths of a foot of the 
     
     
     
+## Convert from I-24 Inception Data to GPS
+Install <latest> tag of i24_rcs via: 
+
+    source activate <desired environment to add package to>
+    pip3 install git+https://github.com/I24-MOTION/i24_rcs@latest
+
+If necessary, install pytorch.
+
+Convert data `x_coordinates`,`y_coordinates`, each a list or array of length `N`.
+
+     import torch
+     from i24_rcs import I24_RCS
+
+     rcs = I24_RCS( <path to rcs v1 file included in repo>)
+     data = torch.zeros(N,6) # x,y,l,w,h,direction
+     data[:,0] = <x_coordinates> - rcs.MM_offset
+     data[:,1] = <y_coordinates> * -1
+     data[:,5] = torch.sign(data[:,1]) # ensure that direction is consistent with y-coordinate sign
+     state_plane_data = rcs.state_to_space(data)
+     gps_data = rcs.space_to_gps(state_plane_data) 
